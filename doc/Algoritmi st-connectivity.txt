@@ -1,0 +1,52 @@
+Algoritmo st-connectivity 1
+------------------------------------
+
+- Leggere grafo da file (non raddoppiare archi)
+- Creare struttura CRS
+- Invocare st-connectivity da source a dest
+
+
+
+
+Algoritmo st-connectivity 2
+-------------------------------------
+
+- Leggere grafo da file (non raddoppiare archi)
+- Creare struttura CRS
+- Lanciare st-connectivity da source e da dest
+- Controllare quando si incontrano (nodo raggiunto in comune in Queue?)
+
+
+
+
+Algoritmo st-connectivity 3
+-------------------------------------
+
+- Leggere grafo da file (non raddoppiare archi)
+- Creare struttura CRS
+- Lanciare st-connectivity da Nodi a caso
+
+
+
+
+Algoritmo Ulmann su grafi con grado limitato (in/out-degree <= 2)
+----------------------------------------------------------------------------
+
+1) Selezionare sqrt(n)log(n) nodi distinti random e, se non incluso, aggiungere il nodo di partenza.
+2) Cercare da tutti i nodi per trovare la lista dei nodi raggiungibili da ognuno lungo un cammino di lunghezza sqrt(n). (possono essere inclusi nodi raggiungibili da cammini più lunghi, ma non nodi non raggiungibili)
+3) Costruire un nuovo grafo H i quali nodi sono costituiti dai nodi distinti scelti in precedenza, vi è un arco da un nodo u a v se è stato determinato che u può raggiungere v.
+4) Calcolare la chiusura transitiva su H e determinare quali nodi sono raggiungibili dal nodo sorgente.
+5) Per ogni nodo v determinare se esiste un nodo w tale che:
+	- raggiunge v in un cammino breve (punto 2)
+	- è raggiungibile dal nodo sorgente (punto 4)
+
+
+
+
+Algoritmo Ulmann su grafi con grado libero
+----------------------------------------------------------------------------
+
+1) Convertire il grafo G in un grafo G' dove il grado è limitato da 2 (introducendo alberi).
+2) Applicare l'algoritmo per i grafi con grado limitato.
+
+
