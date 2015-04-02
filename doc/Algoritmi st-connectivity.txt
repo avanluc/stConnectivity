@@ -50,3 +50,14 @@ Algoritmo Ulmann su grafi con grado libero
 2) Applicare l'algoritmo per i grafi con grado limitato.
 
 
+
+Algoritmo Ulmann BFS
+----------------------------------------------------------------------------
+
+1) Selezionare n/t nodi distinti random e, se non incluso, aggiungere il nodo di partenza.
+2) Effettuare un BFS da ogni nodo distinto fino a distanza t.
+3) Costruire il grafo H i quali nodi sono i nodi distinti selezionati prima ed esiste un arco u-->v, pesato d, se il cammino minimo da u a v, sul grafo G di partenza, ha lunghezza d<=t.
+4) Selezionare n/(t^2) nodi superdistinti di H e includere la sorgente.
+5) Esplorare H da ogni nodo superdistinto fino a distanza t^2.
+6) Costruire il grafo J di nodi superdistinti ed esiste un arco u-->v, pesato d, se il cammino minimo da u a v, sul grafo H, ha lunghezza d<=t^2. Computare il cammino minimo dalla sorgente ad ogni nodo superdistinto, ora abbiamo ottenuto la distanza minima dalla sorgente a tutti i nodi di G.
+7) Effettuare le debite moltiplicazioni per ottenere la distanza dalla sorgente ad un qualsiasi nodo.

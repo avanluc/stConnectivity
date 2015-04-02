@@ -5,6 +5,7 @@
 #include <utility>
 #include <climits>
 #include <vector>
+#include <math.h> 
 
 using namespace std;
 
@@ -25,6 +26,9 @@ int compare(const void *x, const void *y){
 	edge b = *(edge *)y;
 	return a.x < b.x ? -1 : (a.x > b.x ? 1 : (a.y < b.y ? -1 : a.y > b.y));
 }
+
+
+
 
 
 
@@ -54,6 +58,10 @@ bool stConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, con
 	delete Queue;
 	return false;
 }
+
+
+
+
 
 
 
@@ -108,6 +116,32 @@ bool BidirectionalStConnectivity(const int* Nodes, const int* Edges, const int n
 
 
 
+
+
+// Grafo passato in forma CRS
+bool UlmannStConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, const int source, const int target) {
+	int nof_distNodes= (int) sqrt(nof_nodes)*log2(nof_nodes);
+	int* randNodes = new int[nof_distNodes];
+	// Initialize rand function
+	srand (time(NULL));
+	printf(" %d\n", nof_distNodes);
+
+	// Controllare che i nodi siano distinti 
+	for(int i=1; i<nof_distNodes+1; i++)
+	{
+		randNodes[i-1] = (int) rand() % i;
+		printf(" %d ", randNodes[i-1]);
+	}
+
+	return false;
+}
+
+
+
+
+
+
+
 int main(int argc, char *argv[]){
 
 	// If wrong number of argumants print usage
@@ -134,6 +168,11 @@ int main(int argc, char *argv[]){
 			in >> x >> y;
 			graph[i].x = x;
 			graph[i].y = y;
+
+			if(x >= N || y >= N)
+			{
+				printf("Error at row %d: node id > # nodes", i+2);
+			}
 
 			// // Duplicate the arc
 			// graph[i+E].x = y;
@@ -190,6 +229,7 @@ int main(int argc, char *argv[]){
 	// It is convenient to add a N-th element
 	vertex[N] = (E);
 	printf("CSR structure created\n");
+	printf("-------------------------\n");
 	
 	// Source/Target control
 	if( atoi(argv[3]) >= N )
@@ -216,7 +256,7 @@ int main(int argc, char *argv[]){
 		// Calculate elapsed time
 		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
 
-		printf("\nElapsed time for st-Connectivity Algorithm 1 = %.3f s\n", cpuTime);
+		printf("Elapsed time for st-Connectivity Algorithm 1 = %.3f s\n", cpuTime);
 		printf("Result for st-Connectivity Algorithm 1 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
 
 	}
@@ -250,18 +290,19 @@ int main(int argc, char *argv[]){
 		start = clock();
 				
 		//CALCOLO
-
+		bool connect = UlmannStConnectivity(vertex, edges, N, atoi(argv[3]), atoi(argv[4]));
 
 		end = clock();
 		// Calculate elapsed time
 		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
 
 		printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", cpuTime);
+		printf("Result for st-Connectivity Algorithm 3 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
 		
 
 		// Print results
 	}
-
+	printf("-------------------------\n");
 	// Free host memory
 	free(vertex);
 	free(edges);
