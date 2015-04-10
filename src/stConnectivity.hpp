@@ -114,60 +114,183 @@ bool BidirectionalStConnectivity(const int* Nodes, const int* Edges, const int n
 
 
 
-
-/*
-*  Ulmann's sequential version of stConnectivity function
-*/
-bool UlmannStConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, const int source, const int target) {
-	int nof_distNodes= (int) sqrt(nof_nodes)*log2(nof_nodes);
-	int* randNodes = new int[nof_distNodes];
-	// Initialize rand function
-	srand (time(NULL));
-	printf(" %d\n", nof_distNodes);
-
-	// Controllare che i nodi siano distinti e aggiungere source e target 
-	for(int i=1; i<nof_distNodes+1; i++)
-	{
-		randNodes[i-1] = (int) rand() % i;
-		printf(" %d ", randNodes[i-1]);
-	}
-
-
-	// launch BFS from all distinguished nodes and return the list of distinguished nodes reachible from it.
-
-	// create new graph H with only distinguished nodes and add arcs v->u if v can reach u.
-
-	// Launch stConnectivity from source to target on H
-	return false;
-}
-
-
-
 /*
 * stConnectivity sequential function
 */
-vector<int> BFS(const int* Nodes, const int* Edges, const int nof_nodes, const int source, const int target, const int distance) {
+vector<int> BFS(const int* Nodes, const int* Edges, const int nof_nodes,  int source,  int* isRand,  int distance) {
 	int left = 0, right = 1;			// left = # nodi da cui ho fatto la visita, right = # nodi incontrati durante la visita 
 	int* Queue = new int[nof_nodes];	// coda dei nodi da visitare
 	vector<bool> Visited(nof_nodes);	// indica se un nodo è stato visitato
+	vector<int> distances(nof_nodes);
+	vector<int> adj;
 	
 	Queue[0] = source;					// Si parte dalla sorgente
 	Visited[source] = true;				// si marca come visitata
-	
-	while (left < right) {				// fino a che ho ancora nodi dai quali non ho fatto partire la visita 
+	distances[source] = 0;
+
+	//printf("Executing BFS from %d\n", source);
+	int d = 0;
+
+	while (left < right && d < distance) {				// fino a che ho ancora nodi dai quali non ho fatto partire la visita 
+		//printf("IN while\n");
+
 		int qNode = Queue[left++];		// qNode = prossimo nodo da cui far partire la visita
 
 		for (int i = Nodes[qNode]; i < Nodes[qNode + 1]; ++i) {		// per ogni nodo nella lista di adiacenza di qNode
 			int dest = Edges[i];										// dest = destinazione arco
 
-			if (dest == target)						// se dest == target return true
-				return true;
 			if (!Visited[dest]) {					// se dest non è ancora stato visitato 
 				Visited[dest] = true;				// lo marco come visitato
-				Queue[right++] = dest;				// lo aggiungo alla coda dei nodi incontrati durante la visita  
+				distances[dest] = distances[qNode] +1;
+				Queue[right++] = dest;				// lo aggiungo alla coda dei nodi incontrati durante la visita 
+				if ( distances[dest] > distance )
+					d = distance +1;
+				//printf("\tvisited %d at distance %d\n", dest, distances[dest]);
+				//printf("\tarc %d --> %d at distance %d\n",qNode, dest, distances[dest]);
 			}
 		}
 	}
+	for (int i = 0; i < nof_nodes; i++)
+		if( Visited[i] && i != source && isRand[i])
+			adj.push_back(i);
+	
 	delete Queue;
-	return false;
+	return adj;
+	//return false;
 }
+
+
+
+
+
+
+
+
+/*
+*  Ulmann's sequential version of stConnectivity function
+*/
+bool UlmannStConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, const int source, const int target) {
+
+	//int nof_distNodes= (int) sqrt(nof_nodes)*log2(nof_nodes);
+	int nof_distNodes= (int) sqrt(nof_nodes);
+	int* isRand = new int[nof_nodes];
+	int count = nof_distNodes;
+	int distEdges = 0;
+
+	vector< int > distNodes(nof_distNodes);
+	//vector< vector<int> > adjLists(nof_nodes);
+	vector< vector<int> > adjLists(nof_distNodes);
+	//vector<int> utility;
+	srand (time(NULL));			// Initialize rand function
+
+
+	distNodes[0] = source;
+	distNodes[1] = target;
+	isRand[source] = 1;
+	isRand[target] = 1;
+
+	for (int i = 2; i < nof_distNodes; i++)
+	{
+		int n = (int)rand() % nof_nodes;
+		if(find(distNodes.begin(), distNodes.end(), n)==distNodes.end()){
+			distNodes[i] = n;
+			isRand[n] = 1;
+		}
+	}
+
+
+
+
+
+
+	// Controllare che i nodi siano distinti e aggiungere source e target 
+	/*for (int i = 0; i < nof_nodes; i++)
+	{
+		isRand[i] = (int) rand() % 2;
+		if(isRand[i] == 1)
+			count++;
+	}
+	if (!isRand[source])
+	{
+		isRand[source] = 1;
+		count++;
+	}
+	if (!isRand[target])
+	{
+		nof_distNodes
+		count++;
+	}*/
+
+	// printf("N = %d,  count = %d\n",nof_nodes, count);
+	
+	// launch BFS from all distinguished nodes and return the list of distinguished nodes reachible from it.
+	/*for (int i = 0; i < nof_nodes; i++)
+	{
+		if (isRand[i])
+		{
+			adjLists[i] = BFS(Nodes, Edges, nof_nodes, i, isRand, count);
+			distEdges += adjLists[i].size();
+			//utility.push_back(i);
+		}
+		else
+			adjLists[i].push_back(-1);
+	}*/
+	for (int i = 0; i < nof_distNodes; i++)
+	{
+		adjLists[i] = BFS(Nodes, Edges, nof_nodes, distNodes[i], isRand, count);
+		distEdges += adjLists[i].size();
+	}
+	// printf("N = %d,  count = %d\n",nof_nodes, count);
+	
+	// create new graph H with only distinguished nodes and add arcs v->u if v can reach u.
+	int *H_vertex = (int*)calloc(count, sizeof(int));
+	int *H_edges = (int*)calloc(distEdges, sizeof(int));
+
+	int k = 0;
+	int new_source = 0; 
+	int new_target = 1;
+
+	for(int i = 0; i < nof_distNodes; i++)
+	{
+		H_vertex[i] = k;
+		for (int j = 0; j < adjLists[i].size(); j++)
+			H_edges[k++] = find(distNodes.begin(), distNodes.end(), adjLists[i][j]) - distNodes.begin();
+	}
+
+	/*int k = 0; int l = 0;
+	int new_source = 0; 
+	int new_target = 1;
+
+	for(int i = 0; i < nof_nodes; i++)
+	{
+		if(isRand[i])
+		{
+			// if (i == source)
+			// 	new_source = l;
+			// if (i == target)
+			// 	new_target = l;
+			H_vertex[l++] = k;
+			for (int j = 0; j < adjLists[i].size(); j++)
+			{
+				//H_edges[k++] = adjLists[i][j];
+				H_edges[k++] = find(distNodes.begin(), distNodes.end(), adjLists[i][j]) - distNodes.begin();
+			}
+		}
+	}*/
+	// printf("N = %d,  count = %d\n",nof_nodes, count);
+	/*printf("\n\n");
+	for (int i = 0; i < count; i++)
+		printf("| %d ", H_vertex[i]);
+	printf("\n\n");
+	for (int i = 0; i < distEdges; i++)
+		printf("| %d ", H_edges[i]);
+	printf("\n\n");*/
+	
+	// Launch stConnectivity from source to target on H
+	bool b = stConnectivity(H_vertex, H_edges, count, new_source, new_target);
+	free(H_vertex);
+	free(H_edges);
+	free(isRand);
+	return b;
+}
+

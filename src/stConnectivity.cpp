@@ -32,9 +32,8 @@ int main(int argc, char *argv[]){
 
 			if(x >= N || y >= N)
 			{
-				printf("Error at row %d: node id > # nodes", i+2);
+				printf("Error at row %d: node id > # nodes\n", i+2);
 			}
-
 			// // Duplicate the arc
 			// graph[i+E].x = y;
 			// graph[i+E].y = x;
@@ -82,8 +81,6 @@ int main(int argc, char *argv[]){
 		}
 		// Fill adjacency list
 		j++;
-		// edges[i].x = graph[i].x;
-		// edges[i].y = graph[i].y;
 		edges[i] = graph[i].y;
 	}
 
@@ -119,6 +116,7 @@ int main(int argc, char *argv[]){
 
 		printf("Elapsed time for st-Connectivity Algorithm 1 = %.3f s\n", cpuTime);
 		printf("Result for st-Connectivity Algorithm 1 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
+		//printf("%s\n", (connect ? "true" : "false"));
 
 	}
 	/*
@@ -135,12 +133,8 @@ int main(int argc, char *argv[]){
 		end = clock();
 		// Calculate elapsed time
 		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
-
 		printf("Elapsed time for t-Connectivity Algorithm 2 = %.3f s\n", cpuTime);
 		printf("Result for st-Connectivity Algorithm 2 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
-		
-
-		// Print results
 	}
 	/*
 	* St-Connectivity Algorithm 3
@@ -156,18 +150,14 @@ int main(int argc, char *argv[]){
 		end = clock();
 		// Calculate elapsed time
 		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
-
 		printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", cpuTime);
 		printf("Result for st-Connectivity Algorithm 3 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
-		
-
-		// Print results
+		//printf("%s\n", (connect ? "true" : "false"));
 	}
 	printf("-------------------------\n");
 	// Free host memory
 	free(vertex);
 	free(edges);
 	free(graph);
-	
 	return 0;
 }
