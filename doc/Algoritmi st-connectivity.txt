@@ -61,3 +61,33 @@ Algoritmo Ulmann BFS
 5) Esplorare H da ogni nodo superdistinto fino a distanza t^2.
 6) Costruire il grafo J di nodi superdistinti ed esiste un arco u-->v, pesato d, se il cammino minimo da u a v, sul grafo H, ha lunghezza d<=t^2. Computare il cammino minimo dalla sorgente ad ogni nodo superdistinto, ora abbiamo ottenuto la distanza minima dalla sorgente a tutti i nodi di G.
 7) Effettuare le debite moltiplicazioni per ottenere la distanza dalla sorgente ad un qualsiasi nodo.
+
+
+
+
+
+
+
+Scegliere x nodi distinti, con x preso dall'input
+eseguire una bfs dalla sorgente
+
+
+
+
+
+Prendere il numero di nodi distinti x da paramentro
+lanciare x bfs dagli x nodi
+avanzare insieme (un passo alla volta)--> 
+ciclo for (fino a quando non hanno finito tutti)
+{
+	ogni nodo fa un passo e marca i nodi visitati con il suo colore
+	se incontro un nodo già visitato da qualcun'altro me lo segno e continuo la visita sugli altri nodi
+} 
+dovrò avere x code 
+il ciclo finisce quando tutte le bfs sono terminate e quindi ho visitato tutto il grafo
+
+fare prove con vari valori di x (minore di 1000)
+
+
+trovare un modo di ottimizzare la scelta degli x nodi (forse quelli con grado maggiore?)
+non proprio, trovare un modo migliore

@@ -1,6 +1,8 @@
-
 all:
-	g++ src/stConnectivity.cpp src/stConnectivity.hpp -o ./build/stConnectivity
+	nvcc -arch=sm_21 -I./src/cuda  src/cuda/stConnectivity.cu -O3 --disable-warnings -o ./build/cuda/stConnectivity
+
+seq:
+	g++ -o2 src/seq/stConnectivity.cpp src/seq/stConnectivity.hpp -o ./build/seq/stConnectivity
 
 clean:
-	rm -f ./build/*
+	rm -rf ./build/*
