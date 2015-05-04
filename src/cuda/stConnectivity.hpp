@@ -93,22 +93,27 @@ vector< int > ChooseNodes(const int* Nodes, const int nof_nodes, const int nof_d
 
 	vector< int > distNodes(nof_distNodes);			// vector of distinguished nodes
 	vector< ONodes > OrderedNodes(nof_nodes);		// vector of nodes ordered by degree
-	
+
 	distNodes[0] = source;
-	distNodes[1] = target;
+	
+	if(nof_distNodes > 1)
+		distNodes[1] = target;
 
-	for (int i = 0; i < nof_nodes; ++i)
+	if(nof_distNodes > 2)
 	{
-		OrderedNodes[i].id = i;
-		if(i == source || i == target)
-			OrderedNodes[i].degree = -1;	
-		else
-			OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
-	}
-	sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
+		for (int i = 0; i < nof_nodes; ++i)
+		{
+			OrderedNodes[i].id = i;
+			if(i == source || i == target)
+				OrderedNodes[i].degree = -1;	
+			else
+				OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
+		}
+		sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
 
-	for (int i = 2; i < nof_distNodes; i++){
-			distNodes[i] = OrderedNodes[i].id;
+		for (int i = 2; i < nof_distNodes; i++){
+				distNodes[i] = OrderedNodes[i].id;
+		}
 	}
 
 	return distNodes;

@@ -120,7 +120,7 @@ int main(int argc, char *argv[]){
 	bool *newlevel = (bool*)calloc(1, sizeof(bool));
 	
 	// Calculate Kernel grid dimension
-	int dimGrid = ((N)/BLOCK_SIZE)+1;
+	int dimGrid = (N/BLOCK_SIZE)+1;
 
 	// Allocate device memory
 	int *Dedges;
@@ -220,9 +220,14 @@ int main(int argc, char *argv[]){
 	// 	printf("|\n");
 	// }
 	//printf("Calling MatrixBFS with arguments(matrix, %d, %d, %d)\n", nof_distNodes, 0, 1);
-
-	// altrimenti, calculate stConn on the adj matrix on host
-	bool connect = MatrixBFS(matrix, nof_distNodes, 0, 1);
+	bool connect = false;
+	if( nof_distNodes == 1 )
+	{
+		gpuErrchk( cudaMemcpy(Dist_Col, Ddist_Col, sizeN2, cudaMemcpyDeviceToHost) );
+		connect = (Dist_Col[target].y != INT_MAX);
+	}
+	else
+		connect = MatrixBFS(matrix, nof_distNodes, 0, 1);
 
     //return;
 	gpuErrchk( cudaEventRecord(stop, NULL) );
