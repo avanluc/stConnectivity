@@ -46,15 +46,12 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 	in.close();
-	printf("Graph sorted\n");
-
-	// for(int i=0; i<20; i++)
-	//  	printf("%d, %d\n", graph[i].x, graph[i].y);
+	//printf("Graph sorted\n");
 
 	// Memory allocation and initialization
 	int *vertex = (int*)calloc(N+1, sizeof(int));
 	int *edges = (int*)calloc(E, sizeof(int));
-	printf("Memory allocated\n");
+	//printf("Memory allocated\n");
 
 	
 	// Creation of CSR structure
@@ -84,13 +81,12 @@ int main(int argc, char *argv[]){
 		// Fill adjacency list
 		j++;
 		edges[i] = graph[i].y;
-		//printf("set arc %d->%d\n", graph[i].x, edges[i]);
 	}
 
 	// It is convenient to add a N-th element
 	vertex[N] = E;
-	printf("CSR structure created\n");
-	printf("-------------------------\n");
+	//printf("CSR structure created\n");
+	//printf("-------------------------\n");
 
 	int source = atoi(argv[2]);
 	int target = atoi(argv[3]);
@@ -134,11 +130,11 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &DMatrix, sizeN_dist) );
 	gpuErrchk( cudaMalloc((void **) &Ddist_Col, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &DnewLevel, sizeof(bool)) );
-	printf("Device memory allocated\n");
+	//printf("Device memory allocated\n");
  
     // choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
-    vector< int > id = ChooseNodes(vertex, N, nof_distNodes, source, target);		// !!!!!!!!!!
-    printf("Distinguished nodes chosen\n");
+    vector< int > id = ChooseNodes(vertex, N, nof_distNodes, source, target);
+    //printf("Distinguished nodes chosen\n");
     // inizializzazione dei valori a INT_MAX
     for (int i = 0; i < N; i++)
     {
@@ -149,19 +145,18 @@ int main(int argc, char *argv[]){
     // inizializzazione dei valori dei nodi distinti a Distance 0 e Color id
     for (int i = 0; i < nof_distNodes; i++)
 	{
-		//printf("distinguished node %d = %d\n", i, id[i]);
 		int j = id[i];
 		Dist_Col[j].x = 0;
 		Dist_Col[j].y = i;
 	}
-	printf("Valori inizializzati\n");
+	//printf("Valori inizializzati\n");
 
     // Copy host memory for vertex, edges and results vectors to device
     gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(Dedges, edges, sizeE, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeN_dist, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(Ddist_Col, Dist_Col, sizeN2, cudaMemcpyHostToDevice) );
-    printf("Memcopy executed\n");
+    //printf("Memcopy executed\n");
 
 	// current level of visit
     int level = 0;
@@ -181,10 +176,6 @@ int main(int argc, char *argv[]){
 	dim3 block(BLOCK_SIZE, 1);
     dim3 grid(dimGrid, 1);
 
-    // Problema nel ritornare il valore di newlevel!!!!! 
-    // dovrebbe essere una variabile sul device passata come parametro e quindi ritornate tramite memcopy
-
-    //printf("Begin visit with cuda Kernels\n");
     while(newlevel[0])
     {
     	newlevel[0] = false;
@@ -201,13 +192,6 @@ int main(int argc, char *argv[]){
     	level++;
     }
 
-    // Provare a vedere se è possibile lanciare un secondo kernel per calcolare stConn sulla matrice 
-    // mantenendo quest'ultima in memoria device e dopo ritornare solo un booleano
-    
-    // Copy result vector from device to host
-	gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeN_dist, cudaMemcpyDeviceToHost) );
-
-
 	// printf("matrix completed\n");
 
 	// // Print matrix
@@ -219,7 +203,7 @@ int main(int argc, char *argv[]){
 	// 		//printf("i:%d, j:%d, position: %d \n", i, j, nof_distNodes*i+j);
 	// 	printf("|\n");
 	// }
-	//printf("Calling MatrixBFS with arguments(matrix, %d, %d, %d)\n", nof_distNodes, 0, 1);
+
 	bool connect = false;
 	if( nof_distNodes == 1 )
 	{
@@ -227,9 +211,12 @@ int main(int argc, char *argv[]){
 		connect = (Dist_Col[target].y != INT_MAX);
 	}
 	else
+	{
+	    // Copy result vector from device to host
+		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeN_dist, cudaMemcpyDeviceToHost) );
 		connect = MatrixBFS(matrix, nof_distNodes, 0, 1);
+	}
 
-    //return;
 	gpuErrchk( cudaEventRecord(stop, NULL) );
     // Wait for the stop event to complete
     gpuErrchk( cudaEventSynchronize(stop) );
@@ -241,7 +228,7 @@ int main(int argc, char *argv[]){
 
 	printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", msecTotal);
 	printf("Result for st-Connectivity Algorithm 3 from %d to %d is %s\n", source, target, (connect ? "true" : "false"));
-	printf("-------------------------\n");
+	//printf("-------------------------\n");
 	
 	//free memoria device
 	cudaFree(Dvertex);

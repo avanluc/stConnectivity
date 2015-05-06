@@ -21,7 +21,7 @@ int main(int argc, char *argv[]){
 	{
 		// Read graph parameters and allocate memory
 		in >> N >> E;
-		graph = (edge*)malloc(2*E*sizeof(edge));
+		graph = (edge*)malloc(E*sizeof(edge));
 
 		// Read graph
 		for(int i = 0; i < E; i++)
@@ -31,15 +31,15 @@ int main(int argc, char *argv[]){
 			graph[i].y = y;
 
 			// // Duplicate the arc
-			graph[i+E].x = y;
-			graph[i+E].y = x;
+			// graph[i+E].x = y;
+			// graph[i+E].y = x;
 			
 			if(x >= N || y >= N)
 				printf("Error at row %d: node id > # nodes\n", i+2);
 		}
 
 		// Sorting graph using specified compare function
-		qsort(graph, (E*2), sizeof(edge), compare);
+		qsort(graph, (E), sizeof(edge), compare);
 	}
 	else
 	{
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]){
 
 	// Memory allocation and initialization
 	int *vertex = (int*)calloc(N+1, sizeof(int));
-	int *edges = (int*)calloc(E*2, sizeof(int));
+	int *edges = (int*)calloc(E, sizeof(int));
 	printf("Memory allocated\n");
 
 	
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]){
 	int j = 0;  // Current adjacency list length
 
 	// for each arc i in the graph
-	for(int i = 0; i < (E*2); i++)
+	for(int i = 0; i < (E); i++)
 	{
 		// if i isn't the first arc and 
 		// the src of i is different from the src of i-1 
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
 					vertex[l] = vertex[graph[i-1].x] + j;
 			j = 0;
 		}
-		if( i == ((E*2)-1) && graph[i].x < (N-1)){
+		if( i == ((E)-1) && graph[i].x < (N-1)){
 			for (int l = (graph[i].x + 1); l <=N; l++)
 				vertex[l]++;
 		}
@@ -89,78 +89,106 @@ int main(int argc, char *argv[]){
 	}
 
 	// It is convenient to add a N-th element
-	vertex[N] = E*2;
+	vertex[N] = E;
 	printf("CSR structure created\n");
 	printf("-------------------------\n");
 	
+	int source = atoi(argv[3]);
+	int target = atoi(argv[4]);
+	
 	// Source/Target control
-	if( atoi(argv[3]) >= N )
+	if( source >= N )
 	{
 		printf("Source node > |N| = %d\n", N);
 		return -1;
 	}
-	if( atoi(argv[4]) >= N )
+	if( target >= N )
 	{
 		printf("Target node > |N| = %d\n", N);
 		return -1;	
 	}
+
 
 	/*
 	* St-Connectivity Algorithm 1
 	*/
 	if(argv[2][0] == '1')
 	{
-		clock_t start, end;
-		start = clock();
-		bool connect = stConnectivity(vertex, edges, N, atoi(argv[3]), atoi(argv[4]));
-		
-		end = clock();
-		// Calculate elapsed time
-		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
+		for (int i = 0; i < 5; ++i)
+		{
+			clock_t start, end;
+			int* Queue = (int*)calloc(N,sizeof(int));
 
-		printf("Elapsed time for st-Connectivity Algorithm 1 = %.3f s\n", cpuTime);
-		printf("Result for st-Connectivity Algorithm 1 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
-		//printf("%s\n", (connect ? "true" : "false"));
+			start = clock();
 
+			bool connect = stConnectivity(vertex, edges, N, source, target, Queue);
+			
+			end = clock();
+			// Calculate elapsed time
+			double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+			printf("Elapsed time for st-Connectivity Algorithm 1 = %.3f s\n", cpuTime);
+			printf("Result for st-Connectivity Algorithm 1 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
+			free(Queue);
+		}
 	}
 	/*
-	* St-Connectivity Algorithm 2
+	* St-Connectivity Algorithm 2	
 	*/
 	else if(argv[2][0] == '2')
 	{
-		clock_t start, end;
-		start = clock();
-				
-		//CALCOLO
-		bool connect = BidirectionalStConnectivity(vertex, edges, N, atoi(argv[3]), atoi(argv[4]));
+		for (int i = 0; i < 5; ++i)
+		{
+			clock_t start, end;
+			int* Queue = (int*)calloc(N,sizeof(int));
+			int* Queue2 = (int*)calloc(N,sizeof(int));
+			
+			start = clock();
+					
+			//CALCOLO
+			bool connect = BidirectionalStConnectivity(vertex, edges, N, source, target, Queue, Queue2);
 
-		end = clock();
-		// Calculate elapsed time
-		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
-		printf("Elapsed time for t-Connectivity Algorithm 2 = %.3f s\n", cpuTime);
-		printf("Result for st-Connectivity Algorithm 2 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
+			end = clock();
+			// Calculate elapsed time
+			double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
+			printf("Elapsed time for t-Connectivity Algorithm 2 = %.3f s\n", cpuTime);
+			printf("Result for st-Connectivity Algorithm 2 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
+			free(Queue);
+			free(Queue2);
+
+		}
 	}
 	/*
 	* St-Connectivity Algorithm 3
 	*/
 	else if(argv[2][0] == '3')
 	{
-		clock_t start, end;
-		start = clock();
-				
-		//CALCOLO
-		bool connect = UlmannStConnectivity(vertex, edges, N, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+		int nof_distNodes = atoi(argv[5]);
+		for (int i = 0; i < 5; ++i)
+		{
+			bool* adjMatrix = (bool*)calloc(nof_distNodes*nof_distNodes, sizeof(bool));		//adjacence matrix distiguished nodes
+			int** Queue = new int*[nof_distNodes];		// array of queues
+			for(int i = 0; i < nof_distNodes; i++)
+				Queue[i] = new int[N];
 
-		end = clock();
-		// Calculate elapsed time
-		double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
-		printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", cpuTime);
-		printf("Result for st-Connectivity Algorithm 3 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
-		//printf("%s\n", (connect ? "true" : "false"));
+			clock_t start, end;
+			start = clock();
+					
+			//CALCOLO
+			bool connect = UlmannStConnectivity(vertex, edges, N, source, target, nof_distNodes, Queue, adjMatrix);
+
+			end = clock();
+			// Calculate elapsed time
+			double cpuTime = ((double)(end - start)) / CLOCKS_PER_SEC;
+			printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", cpuTime);
+			printf("Result for st-Connectivity Algorithm 3 from %s to %s is %s\n", argv[3], argv[4], (connect ? "true" : "false"));
+			delete [] Queue;
+			free(adjMatrix);
+		}
 	}
 	else
 	{
-		int bfs = SimpleBFS(vertex, edges, N, atoi(argv[3]));
+		int bfs = SimpleBFS(vertex, edges, N, source);
 		printf("%d\n", bfs);
 	}
 	printf("-------------------------\n");

@@ -10,8 +10,7 @@ __global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col,
     int bx = blockIdx.x;
     int tx = threadIdx.x;
     int id = tx + (bx*BLOCK_SIZE);
-    //printf("Visita partita da %d\n",id);
-
+    
 	for (int i = id; i < nof_nodes; i += gridDim.x * BLOCK_SIZE) 
 	{
 	    if(i < nof_nodes)
@@ -20,14 +19,11 @@ __global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col,
 			if (Dist_Col[i].x == level) 										// se i è alla distanza giusta (ultima distanza visitata)
 			{
 				const int2 currDC = Dist_Col[i];
-	    		//printf("Visita partita da %d con Distanza %d e Colore %d\n", i, currDC.x,  currDC.y);
-	    		//printf("Visita partita da %d con Distanza %d e Colore %d\n", i,  Dist_Col[i].x,   Dist_Col[i].y);
 	    		for (int j = devNodes[i]; j < devNodes[i + 1]; j++) 			// per ogni vicino di i
 				{
 					const int dest = devEdges[j];
 					int2 destDC = Dist_Col[dest];
-					//printf("dal nodo %d vedo il nodo %d e destDC.x != INT_MAX vale %d\n", i, dest, (destDC.x != INT_MAX));
-
+					
 					if(destDC.x != INT_MAX && destDC.y != currDC.y)// se è già stato visitato da qualcun altro
 					{
 						//printf("incontro tra il nodo %d (visitato da %d) e %d (visitato da %d)\n", i, currDC.y, dest, destDC.y);
@@ -38,8 +34,10 @@ __global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col,
 					if (destDC.x == INT_MAX) 							// se non è ancora stato visitato
 					{
 						//printf("dal nodo %d visito il nodo %d\n", i, dest);
+						//atomicMin(&(Dist_Col[dest].x), level + 1);
+						//atomicMin(&(Dist_Col[dest].y), currDC.y);
 						Dist_Col[dest].x = level + 1;							// lo visito e aggiorno la distanza
-						Dist_Col[dest].y = currDC.y;						// setto il suo Dist_Cole come il Dist_Cole del padre
+						Dist_Col[dest].y = currDC.y;							// setto il suo Dist_Cole come il Dist_Cole del padre
 						newLevel[0] = true;										// notifico che ho trovato nuovi nodi da visitare
 					}
 				}
