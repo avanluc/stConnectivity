@@ -103,7 +103,12 @@ int main(int argc, char *argv[]){
 		printf("Target node > |N| = %d\n", N);
 		return -1;	
 	}
-	
+
+printf("BLOCK_SIZE = %d\n", BLOCK_SIZE);
+int DD[15] = {1,2,10,50,100,500,1000,1500,2000,2500,3000,4000,5000,6000,7000};
+for (int s = 0; s < 15; ++s)
+{
+	nof_distNodes = DD[s];
 	// calculate size for allocation
 	size_t sizeN = (N+1) * sizeof(int);
 	size_t sizeE = E * sizeof(int);
@@ -117,6 +122,12 @@ int main(int argc, char *argv[]){
 	
 	// Calculate Kernel grid dimension
 	int dimGrid = (N/BLOCK_SIZE)+1;
+
+	if(dimGrid > DIMGRID_MAX)
+	{
+		//printf("Invalid value for dimGrid, value set to DIMGRID_MAX.\n");
+		dimGrid = DIMGRID_MAX;
+	}
 
 	// Allocate device memory
 	int *Dedges;
@@ -135,6 +146,7 @@ int main(int argc, char *argv[]){
     // choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
     vector< int > id = ChooseNodes(vertex, N, nof_distNodes, source, target);
     //printf("Distinguished nodes chosen\n");
+
     // inizializzazione dei valori a INT_MAX
     for (int i = 0; i < N; i++)
     {
@@ -160,6 +172,7 @@ int main(int argc, char *argv[]){
 
 	// current level of visit
     int level = 0;
+    //int newlevel = 0;
     newlevel[0] = true;
 
 	// Allocate CUDA events to be used for timing
@@ -176,23 +189,28 @@ int main(int argc, char *argv[]){
 	dim3 block(BLOCK_SIZE, 1);
     dim3 grid(dimGrid, 1);
 
+  //   do{
+  //   	printf("\nCalling kernel with parameters(Dvertex, Dedges, Ddist_Col, %d, %d, %d, DMatrix)\n", level, N, nof_distNodes);
+  //   	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix);
+  //   	//printf("\nExecuted a visit to level %d\n\n", level);
+  //   	cudaDeviceSynchronize();
+		// cudaMemcpyFromSymbolAsync(&newlevel, devNextLevel, sizeof(int), level & 2, cudaMemcpyDeviceToHost);
+    	
+  //   	level++;
+  //   	printf("newlevel = %d\n", newlevel);
+  //   }while(newlevel);
+
     while(newlevel[0])
     {
     	newlevel[0] = false;
     	
     	gpuErrchk( cudaMemcpy(DnewLevel, newlevel, sizeof(bool), cudaMemcpyHostToDevice) );
     	
-    	//printf("\nCalling kernel with parameters(Dvertex, Dedges, Ddist_Col, %d, false, DMatrix, %d, %d)", level, N, nof_distNodes);
-    	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, DnewLevel, DMatrix, N, nof_distNodes);
-    	//printf("\nExecuted a visit to level %d\n\n", level);
+    	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix, DnewLevel);
 		
 		gpuErrchk( cudaMemcpy(newlevel, DnewLevel, sizeof(bool), cudaMemcpyDeviceToHost) );
-    	
-    	//printf("newlevel = %d\n", newlevel[0]);
     	level++;
     }
-
-	// printf("matrix completed\n");
 
 	// // Print matrix
 	// for (int i = 0; i < nof_distNodes; ++i)
@@ -203,6 +221,7 @@ int main(int argc, char *argv[]){
 	// 		//printf("i:%d, j:%d, position: %d \n", i, j, nof_distNodes*i+j);
 	// 	printf("|\n");
 	// }
+	//printf("matrix completed\n");
 
 	bool connect = false;
 	if( nof_distNodes == 1 )
@@ -226,9 +245,10 @@ int main(int argc, char *argv[]){
     gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
     msecTotal /= 1000;
 
-	printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", msecTotal);
-	printf("Result for st-Connectivity Algorithm 3 from %d to %d is %s\n", source, target, (connect ? "true" : "false"));
-	//printf("-------------------------\n");
+	printf("nodes = %d \tTime = %.3f s\n",nof_distNodes, msecTotal);
+	// printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", msecTotal);
+	// printf("Result for st-Connectivity Algorithm 3 from %d to %d is %s\n", source, target, (connect ? "true" : "false"));
+	// printf("-------------------------\n");
 	
 	//free memoria device
 	cudaFree(Dvertex);
@@ -239,10 +259,11 @@ int main(int argc, char *argv[]){
 
 	free(matrix);
 	free(Dist_Col);
+	free(newlevel);
+}
 	free(vertex);
 	free(edges);
 	free(graph);
-	free(newlevel);
 
 	return 0;
 }

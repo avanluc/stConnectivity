@@ -11,7 +11,10 @@
 using namespace std;
 
 // Block size
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 256
+#define DIMGRID_MAX 65535
+
+//__device__ bool devNextLevel[2];
 
 // Graph parameters (#nodes, #edges)
 int  N, E;
@@ -117,4 +120,41 @@ vector< int > ChooseNodes(const int* Nodes, const int nof_nodes, const int nof_d
 	}
 
 	return distNodes;
+}
+
+
+
+
+__device__ __forceinline__ int LaneID() {
+    int ret;
+    asm("mov.u32 %0, %laneid;" : "=r"(ret) );
+    return ret;
+}
+
+
+
+__device__ int2 atomicMax(int2* address, int2 val)
+{
+    unsigned long long* addr_as_ull = (unsigned long long*)address;
+    unsigned long long  old = *addr_as_ull;
+    unsigned long long  assumed;
+    do {
+        assumed = old;
+        int2* temp = (int2*)&assumed;
+        if (val.x > temp->x || (val.x == temp->x && val.y > temp->y))
+            old = atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
+        else
+            break;
+    }while(assumed != old);
+    return *((int2*)&old);
+}
+
+
+__device__ void atomicStore(int2* address, int2 val){
+    unsigned long long* addr_as_ull = (unsigned long long*)address;
+    unsigned long long  old = *addr_as_ull;
+    unsigned long long  assumed;
+    assumed = old;
+    atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
+    return;
 }

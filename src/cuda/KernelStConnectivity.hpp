@@ -3,13 +3,24 @@
 /*
 * CUDA Kernel Device code
 */
-__global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col, const int level, bool* newLevel, bool* Matrix, const int nof_nodes, const int nof_distNodes)
-{
+// __global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col, const int level, bool* newLevel, bool* Matrix, const int nof_nodes, const int nof_distNodes)
+// {
+__global__ void stConn(	const int* __restrict__ devNodes, 
+						const int* __restrict__ devEdges, 
+						int2* __restrict__ Dist_Col, 
+						const int level, 
+						const int nof_nodes, 
+						const int nof_distNodes,
+						bool* Matrix,
+						bool* newLevel) { 
 
 	// Calcolate thread id
     int bx = blockIdx.x;
     int tx = threadIdx.x;
     int id = tx + (bx*BLOCK_SIZE);
+ //    if (id == 0)
+	// 	devNextLevel[(level & 1) + 1] = false;	// level & 1  bitwise and tra level e 1, ritorna il bit meno significativo di level
+	// int newLevel = false;
     
 	for (int i = id; i < nof_nodes; i += gridDim.x * BLOCK_SIZE) 
 	{
@@ -34,15 +45,19 @@ __global__ void stConn(const int* devNodes, const int* devEdges, int2* Dist_Col,
 					if (destDC.x == INT_MAX) 							// se non è ancora stato visitato
 					{
 						//printf("dal nodo %d visito il nodo %d\n", i, dest);
-						//atomicMin(&(Dist_Col[dest].x), level + 1);
-						//atomicMin(&(Dist_Col[dest].y), currDC.y);
-						Dist_Col[dest].x = level + 1;							// lo visito e aggiorno la distanza
-						Dist_Col[dest].y = currDC.y;							// setto il suo Dist_Cole come il Dist_Cole del padre
+						int2 val = make_int2(level + 1,currDC.y);
+						atomicStore(&Dist_Col[dest], val);
+						// Dist_Col[dest].x = level + 1;							// lo visito e aggiorno la distanza
+						// Dist_Col[dest].y = currDC.y;							// setto il suo Dist_Cole come il Dist_Cole del padre
 						newLevel[0] = true;										// notifico che ho trovato nuovi nodi da visitare
 					}
 				}
 			}
 		}
     }
-
+  //   if (__any(newLevel) && LaneID() == 0)		// (Tid & 31) === LaneID()
+  //   {
+		// devNextLevel[level & 1] = true;
+		// printf("devNextLevel[%d] = %d\n", (level & 1), devNextLevel[level & 1]);
+  //   }
 }
