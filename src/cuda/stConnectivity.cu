@@ -104,11 +104,11 @@ int main(int argc, char *argv[]){
 		return -1;	
 	}
 
-printf("BLOCK_SIZE = %d\n", BLOCK_SIZE);
-int DD[15] = {1,2,10,50,100,500,1000,1500,2000,2500,3000,4000,5000,6000,7000};
-for (int s = 0; s < 15; ++s)
-{
-	nof_distNodes = DD[s];
+// printf("BLOCK_SIZE = %d\n", BLOCK_SIZE);
+// int DD[15] = {1,2,10,50,100,500,1000,1500,2000,2500,3000,4000,5000,6000,7000};
+// for (int s = 0; s < 15; ++s)
+// {
+// nof_distNodes = DD[s];
 	// calculate size for allocation
 	size_t sizeN = (N+1) * sizeof(int);
 	size_t sizeE = E * sizeof(int);
@@ -141,7 +141,7 @@ for (int s = 0; s < 15; ++s)
 	gpuErrchk( cudaMalloc((void **) &DMatrix, sizeN_dist) );
 	gpuErrchk( cudaMalloc((void **) &Ddist_Col, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &DnewLevel, sizeof(bool)) );
-	//printf("Device memory allocated\n");
+	printf("Device memory allocated\n");
  
     // choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
     vector< int > id = ChooseNodes(vertex, N, nof_distNodes, source, target);
@@ -157,11 +157,12 @@ for (int s = 0; s < 15; ++s)
     // inizializzazione dei valori dei nodi distinti a Distance 0 e Color id
     for (int i = 0; i < nof_distNodes; i++)
 	{
+		//printf("choosen node : %d\n", id[i]);
 		int j = id[i];
 		Dist_Col[j].x = 0;
 		Dist_Col[j].y = i;
 	}
-	//printf("Valori inizializzati\n");
+	printf("Valori inizializzati\n");
 
     // Copy host memory for vertex, edges and results vectors to device
     gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN, cudaMemcpyHostToDevice) );
@@ -172,7 +173,7 @@ for (int s = 0; s < 15; ++s)
 
 	// current level of visit
     int level = 0;
-    //int newlevel = 0;
+    int newlevel1 = 0;
     newlevel[0] = true;
 
 	// Allocate CUDA events to be used for timing
@@ -189,28 +190,28 @@ for (int s = 0; s < 15; ++s)
 	dim3 block(BLOCK_SIZE, 1);
     dim3 grid(dimGrid, 1);
 
-  //   do{
-  //   	printf("\nCalling kernel with parameters(Dvertex, Dedges, Ddist_Col, %d, %d, %d, DMatrix)\n", level, N, nof_distNodes);
-  //   	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix);
-  //   	//printf("\nExecuted a visit to level %d\n\n", level);
-  //   	cudaDeviceSynchronize();
-		// cudaMemcpyFromSymbolAsync(&newlevel, devNextLevel, sizeof(int), level & 2, cudaMemcpyDeviceToHost);
+    do{
+    	//printf("\nCalling kernel with parameters(Dvertex, Dedges, Ddist_Col, %d, %d, %d, DMatrix)\n", level, N, nof_distNodes);
+    	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix);
+    	//printf("\nExecuted a visit to level %d\n\n", level);
+    	//cudaDeviceSynchronize();
+		cudaMemcpyFromSymbolAsync(&newlevel1, devNextLevel, sizeof(bool), (level & 1)*(sizeof(bool)), cudaMemcpyDeviceToHost);
     	
-  //   	level++;
-  //   	printf("newlevel = %d\n", newlevel);
-  //   }while(newlevel);
-
-    while(newlevel[0])
-    {
-    	newlevel[0] = false;
-    	
-    	gpuErrchk( cudaMemcpy(DnewLevel, newlevel, sizeof(bool), cudaMemcpyHostToDevice) );
-    	
-    	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix, DnewLevel);
-		
-		gpuErrchk( cudaMemcpy(newlevel, DnewLevel, sizeof(bool), cudaMemcpyDeviceToHost) );
     	level++;
-    }
+    	// printf("newlevel = %d\n", newlevel1);
+    }while(newlevel1);
+
+  //   while(newlevel[0])
+  //   {
+  //   	newlevel[0] = false;
+    	
+  //   	gpuErrchk( cudaMemcpy(DnewLevel, newlevel, sizeof(bool), cudaMemcpyHostToDevice) );
+    	
+  //   	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix, DnewLevel);
+		
+		// gpuErrchk( cudaMemcpy(newlevel, DnewLevel, sizeof(bool), cudaMemcpyDeviceToHost) );
+  //   	level++;
+  //   }
 
 	// // Print matrix
 	// for (int i = 0; i < nof_distNodes; ++i)
@@ -245,10 +246,10 @@ for (int s = 0; s < 15; ++s)
     gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
     msecTotal /= 1000;
 
-	printf("nodes = %d \tTime = %.3f s\n",nof_distNodes, msecTotal);
-	// printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", msecTotal);
-	// printf("Result for st-Connectivity Algorithm 3 from %d to %d is %s\n", source, target, (connect ? "true" : "false"));
-	// printf("-------------------------\n");
+	// printf("nodes = %d \tTime = %.3f s\n",nof_distNodes, msecTotal);
+	printf("Elapsed time for t-Connectivity Algorithm 3 = %.3f s\n", msecTotal);
+	printf("Result for st-Connectivity Algorithm 3 from %d to %d is %s\n", source, target, (connect ? "true" : "false"));
+	printf("-------------------------\n");
 	
 	//free memoria device
 	cudaFree(Dvertex);
@@ -260,7 +261,7 @@ for (int s = 0; s < 15; ++s)
 	free(matrix);
 	free(Dist_Col);
 	free(newlevel);
-}
+// }
 	free(vertex);
 	free(edges);
 	free(graph);

@@ -11,24 +11,24 @@ __global__ void stConn(	const int* __restrict__ devNodes,
 						const int level, 
 						const int nof_nodes, 
 						const int nof_distNodes,
-						bool* Matrix,
-						bool* newLevel) { 
+						bool* Matrix){
+//						bool* newLevel) { 
 
 	// Calcolate thread id
     int bx = blockIdx.x;
     int tx = threadIdx.x;
     int id = tx + (bx*BLOCK_SIZE);
- //    if (id == 0)
-	// 	devNextLevel[(level & 1) + 1] = false;	// level & 1  bitwise and tra level e 1, ritorna il bit meno significativo di level
-	// int newLevel = false;
+    if (id == 0)
+		devNextLevel[((level & 1) + 1) & 1] = false;
+	int newLevel = false;
     
 	for (int i = id; i < nof_nodes; i += gridDim.x * BLOCK_SIZE) 
 	{
 	    if(i < nof_nodes)
 	    {
-	    	//printf("Visita partita da %d\n",i);
 			if (Dist_Col[i].x == level) 										// se i è alla distanza giusta (ultima distanza visitata)
 			{
+	    		//printf("Visita partita da %d\n",i);
 				const int2 currDC = Dist_Col[i];
 	    		for (int j = devNodes[i]; j < devNodes[i + 1]; j++) 			// per ogni vicino di i
 				{
@@ -49,15 +49,38 @@ __global__ void stConn(	const int* __restrict__ devNodes,
 						atomicStore(&Dist_Col[dest], val);
 						// Dist_Col[dest].x = level + 1;							// lo visito e aggiorno la distanza
 						// Dist_Col[dest].y = currDC.y;							// setto il suo Dist_Cole come il Dist_Cole del padre
-						newLevel[0] = true;										// notifico che ho trovato nuovi nodi da visitare
+						newLevel = true;										// notifico che ho trovato nuovi nodi da visitare
 					}
 				}
 			}
 		}
     }
-  //   if (__any(newLevel) && LaneID() == 0)		// (Tid & 31) === LaneID()
-  //   {
-		// devNextLevel[level & 1] = true;
-		// printf("devNextLevel[%d] = %d\n", (level & 1), devNextLevel[level & 1]);
-  //   }
+    if (__any(newLevel) && LaneID() == 0)		// (Tid & 31) === LaneID()
+    {
+		devNextLevel[level & 1] = true;
+		//printf("devNextLevel[%d] = %d\n", (level & 1), devNextLevel[level & 1]);
+    }
 }
+
+/*
+__global__ void Mat(	const int* __restrict__ devNodes, 
+						const int* __restrict__ devEdges, 
+						int2* __restrict__ Dist_Col, 
+						const int level, 
+						const int nof_nodes, 
+						const int nof_distNodes,
+						bool* Matrix,
+						bool* newLevel) { 
+for (int i = ID; i < nof_nodes; i += gridDim.x * BlockDim) {
+		if (Distance[i] == level) {
+			for (int j = devNodes[ID]; j < devNodes[ID + 1]; j++) {
+				const int dest = devEdges[j];
+				if (Distance[dest] == INT_MAX) {
+					Distance[dest] = level + 1;
+					newLevel = true;
+				}
+			}
+		}
+	}
+}
+*/

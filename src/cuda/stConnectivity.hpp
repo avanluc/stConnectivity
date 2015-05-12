@@ -14,7 +14,7 @@ using namespace std;
 #define BLOCK_SIZE 256
 #define DIMGRID_MAX 65535
 
-//__device__ bool devNextLevel[2];
+__device__ bool devNextLevel[2];
 
 // Graph parameters (#nodes, #edges)
 int  N, E;
