@@ -11,8 +11,9 @@
 using namespace std;
 
 // Block size
-#define BLOCK_SIZE 256
-#define DIMGRID_MAX 65535
+#define BLOCK_SIZE	256
+#define WARP_SIZE	16
+#define DIMGRID_MAX	65535
 
 __device__ bool devNextLevel[2];
 
@@ -30,6 +31,12 @@ struct edge{
 struct ONodes{
 	int id;
 	int degree;
+};
+
+// Stuct for ordered nodes
+struct warpmem_t{
+	int nodes[BLOCK_SIZE+1];
+	int2 Dst_Col[BLOCK_SIZE];
 };
 
 
