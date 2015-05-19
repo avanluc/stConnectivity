@@ -85,6 +85,7 @@ int main(int argc, char *argv[]){
 
 	// It is convenient to add a N-th element
 	vertex[N] = E;
+
 	//printf("CSR structure created\n");
 	//printf("-------------------------\n");
 
@@ -120,17 +121,13 @@ int main(int argc, char *argv[]){
 	bool *matrix = (bool*)calloc(nof_distNodes * nof_distNodes, sizeof(bool));
 	int2 *Dist_Col = (int2*)calloc(N, sizeof(int2));
 	int *Distance = (int*)calloc(nof_distNodes, sizeof(int));
-	bool *newlevel = (bool*)calloc(1, sizeof(bool));
+	//bool *newlevel = (bool*)calloc(1, sizeof(bool));
 	
 	// Calculate Kernel grid dimension
-	//int dimGrid = (N/BLOCK_SIZE)+1;
-	int dimGrid = 96;
+	// int dimGrid = (N/BLOCK_SIZE)+1;
 
-	if(dimGrid > DIMGRID_MAX)
-	{
-		//printf("Invalid value for dimGrid, value set to DIMGRID_MAX.\n");
-		dimGrid = DIMGRID_MAX;
-	}
+	// if(dimGrid > DIMGRID_MAX)
+	// 	dimGrid = DIMGRID_MAX;
 
 	// Allocate device memory
 	int *Dedges;
@@ -145,7 +142,7 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &Dedges, sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, sizeN_dist) );
 	gpuErrchk( cudaMalloc((void **) &Ddist_Col, sizeN2) );
-	gpuErrchk( cudaMalloc((void **) &DnewLevel, sizeof(bool)) );
+	//gpuErrchk( cudaMalloc((void **) &DnewLevel, sizeof(bool)) );
 	printf("Device memory allocated\n");
  
     // choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
@@ -171,18 +168,25 @@ int main(int argc, char *argv[]){
 	Distance[0] = 0;
 	printf("Valori inizializzati\n");
 
+	bool NextLevel[4];
+	for (int i = 0; i < 4; ++i)
+	{
+		NextLevel[i] = false;
+	}
     // Copy host memory for vertex, edges and results vectors to device
     gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(Dedges, edges, sizeE, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeN_dist, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(Ddist_Col, Dist_Col, sizeN2, cudaMemcpyHostToDevice) );
     gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN3, cudaMemcpyHostToDevice) );
-    //printf("Memcopy executed\n");
+    gpuErrchk( cudaMemcpyToSymbol(devNextLevel, NextLevel, sizeof(bool)*4, 0,cudaMemcpyHostToDevice) );
+
+    printf("Memcopy executed\n");
 
 	// current level of visit
     int level = 0;
-    int newlevel1 = 0;
-    newlevel[0] = true;
+    //int newlevel1 = 0;
+    //newlevel[0] = true;
 
 	// Allocate CUDA events to be used for timing
     cudaEvent_t start;
@@ -192,31 +196,39 @@ int main(int argc, char *argv[]){
     gpuErrchk( cudaEventCreate(&stop) );
     
     // Record the start event
-    //gpuErrchk( cudaEventRecord(start, NULL) );
+    gpuErrchk( cudaEventRecord(start, NULL) );
 
     // Launch Cuda Kernel
 	dim3 block(BLOCK_SIZE, 1);
-    dim3 grid(dimGrid, 1);
+    dim3 grid(MAX_CONCURR_BL(BLOCK_SIZE), 1);
+    
+    GReset<<< grid, block >>>();
+    
+    stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, N, nof_distNodes, DMatrix);
 
-    do{
-    	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix);
+/*############# OLD VERSION ###############*/
+    // do{
+    // 	stConn1<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix);
     	
-    	cudaMemcpyFromSymbolAsync(&newlevel1, devNextLevel, sizeof(bool), (level & 1)*sizeof(bool), cudaMemcpyDeviceToHost);
+    // 	cudaMemcpyFromSymbolAsync(&newlevel1, devNextLevel, sizeof(bool), (level & 1)*sizeof(bool), cudaMemcpyDeviceToHost);
     	
-    	level++;
-    }while(newlevel1);
+    // 	level++;
+    // }while(newlevel1);
 
-  //   while(newlevel[0])
-  //   {
-  //   	newlevel[0] = false;
+
+/*############# OLDER VERSION ##############*/
+   //  while(newlevel[0])
+   //  {
+   //  	newlevel[0] = false;
     	
-  //   	gpuErrchk( cudaMemcpy(DnewLevel, newlevel, sizeof(bool), cudaMemcpyHostToDevice) );
+   //  	gpuErrchk( cudaMemcpy(DnewLevel, newlevel, sizeof(bool), cudaMemcpyHostToDevice) );
     	
-  //   	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix, DnewLevel);
+   //  	stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, level, N, nof_distNodes, DMatrix, DnewLevel);
 		
-  //	gpuErrchk( cudaMemcpy(newlevel, DnewLevel, sizeof(bool), cudaMemcpyDeviceToHost) );
-  //   	level++;
-  //   }
+  	// gpuErrchk( cudaMemcpy(newlevel, DnewLevel, sizeof(bool), cudaMemcpyDeviceToHost) );
+   //  	level++;
+   //  }
+
 
 	// Print matrix
 	// gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeN_dist, cudaMemcpyDeviceToHost) );
@@ -228,8 +240,8 @@ int main(int argc, char *argv[]){
 	// 	printf("|\n");
 	// }
 	//printf("matrix completed\n");
+	
 
-    gpuErrchk( cudaEventRecord(start, NULL) );
 	bool connect = false;
 	if( nof_distNodes == 1 )
 	{
@@ -239,22 +251,8 @@ int main(int argc, char *argv[]){
 	else
 	{
 	    // Copy result vector from device to host
-		// gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeN_dist, cudaMemcpyDeviceToHost) );
-		// connect = MatrixBFS(matrix, nof_distNodes, 0, 1);
-
-		level = 0;
-		//newlevel1 = 0;
-		cudaMemcpyToSymbolAsync(devNextLevel, &newlevel1, sizeof(bool), (level & 1)*sizeof(bool), cudaMemcpyDeviceToHost);
-	    Mat<<< grid, block >>>(DMatrix, Ddistance, level, nof_distNodes);
-		
-		//do{
-	    	//Mat<<< grid, block >>>(DMatrix, Ddistance, level, nof_distNodes);
-			//cudaMemcpyFromSymbolAsync(&newlevel1, devNextLevel, sizeof(bool), (level & 1)*sizeof(bool), cudaMemcpyDeviceToHost);
-	    	//level++;
-    	//}while(newlevel1);
-
-    	gpuErrchk( cudaMemcpy(Distance, Ddistance, sizeN3, cudaMemcpyDeviceToHost) );
-    	connect = (Distance[1] != INT_MAX);
+		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeN_dist, cudaMemcpyDeviceToHost) );
+		connect = MatrixBFS(matrix, nof_distNodes, 0, 1);
 	}
 
 	gpuErrchk( cudaEventRecord(stop, NULL) );
@@ -276,12 +274,12 @@ int main(int argc, char *argv[]){
     cudaFree(Dedges);
     cudaFree(DMatrix);
     cudaFree(Ddist_Col);
-    cudaFree(DnewLevel);
+    //cudaFree(DnewLevel);
     cudaFree(Ddistance);
 
 	free(matrix);
 	free(Dist_Col);
-	free(newlevel);
+	//free(newlevel);
 	free(Distance);
 // }
 	free(vertex);
