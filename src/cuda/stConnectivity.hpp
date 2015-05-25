@@ -2,14 +2,12 @@
 #include <fstream>
 #include <algorithm>
 #include <climits>
+#include <stdlib.h>
 #include <vector>
 #include <../../cub/cub.cuh>
 
-//#define DIMGRID_MAX	65535
-
+#define N_TEST 100
 using namespace std;
-
-__device__ bool devNextLevel[4];
 
 // Graph parameters (#nodes, #edges)
 int  N, E;
@@ -40,6 +38,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
+
 /*
 * Compare function for sorting
 */
@@ -49,13 +48,13 @@ int compare(const void *x, const void *y){
 	return a.x < b.x ? -1 : (a.x > b.x ? 1 : (a.y < b.y ? -1 : a.y > b.y));
 }
 
+
 /*
 * Compare function for sorting nodes per degree
 */
 int ONodesCompare(const ONodes &a, const ONodes &b){
 	return a.degree > b.degree;
 }
-
 
 
 /*
@@ -82,6 +81,7 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 	delete [] Queue;
 	return (Visited[target] == true);
 }
+
 
 /*
 * Function that choose nof_distNodes nodes of the graph
@@ -113,26 +113,4 @@ vector< int > ChooseNodes(const int* Nodes, const int nof_nodes, const int nof_d
 	}
 
 	return distNodes;
-}
-
-
-/*
-* Self made atomic function to store a int2 value 
-*/
-__device__ __forceinline__ void atomicStore(int2* address, int2 val){
-    unsigned long long* addr_as_ull = (unsigned long long*)address;
-    unsigned long long  old = *addr_as_ull;
-    unsigned long long  assumed;
-    assumed = old;
-    atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
-    return;
-}
-
-
-
-
-__device__ __forceinline__ int LaneID() {
-    int ret;
-    asm("mov.u32 %0, %laneid;" : "=r"(ret) );
-    return ret;
 }

@@ -1,5 +1,3 @@
-#pragma once
-
 #include <stConnectivity.hpp>
 
 #define		   BLOCK_SIZE	256
@@ -8,8 +6,29 @@
 #define    MAX_CONCURR_TH	(Thread_Per_SM * N_OF_SMs)
 #define    MAX_CONCURR_BL(BlockDim)	( MAX_CONCURR_TH / (BlockDim) )
 
-__device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
 
+__device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
+__device__ bool devNextLevel[4];
+
+
+/*
+* Self made atomic function to store a int2 value 
+*/
+__device__ __forceinline__ void atomicStore(int2* address, int2 val){
+    unsigned long long* addr_as_ull = (unsigned long long*)address;
+    unsigned long long  old = *addr_as_ull;
+    unsigned long long  assumed;
+    assumed = old;
+    atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
+    return;
+}
+
+
+__device__ __forceinline__ int LaneID() {
+    int ret;
+    asm("mov.u32 %0, %laneid;" : "=r"(ret) );
+    return ret;
+}
 
 
 __global__ void GReset() {
@@ -89,6 +108,8 @@ __device__  __forceinline__ bool stConnCore(const int* __restrict__ devNodes,
 						//printf("\tdal nodo %d visito il nodo %d\n", i, dest);
 						int2 val = make_int2(level + 1,currDC.y);
 						atomicStore(&Dist_Col[dest], val);
+						// Dist_Col[dest].x = level + 1;
+						// Dist_Col[dest].y = currDC.y;
 						newLevel = true;									// notifico che ho trovato nuovi nodi da visitare
 					}
 				}
@@ -118,7 +139,6 @@ __global__ void stConn(	const int* __restrict__ devNodes,
     	// Set NextLevel to false for the next iteration
 	    if (id == 0)
 			devNextLevel[(level +1) & 3] = false;
-	    //int newLevel = true;
 	    // Call Kernel core function
 	    int newLevel = stConnCore(devNodes, devEdges, Dist_Col, nof_nodes, nof_distNodes, id, level, Matrix);
 		
@@ -144,6 +164,7 @@ __global__ void stConn(	const int* __restrict__ devNodes,
 /*
 * ############### OLD CUDA Kernel Device code #####################
 */
+/*
 __global__ void stConn1(	const int* __restrict__ devNodes, 
 						const int* __restrict__ devEdges, 
 						int2* __restrict__ Dist_Col, 
@@ -206,4 +227,4 @@ __global__ void stConn1(	const int* __restrict__ devNodes,
     	//GlobalSync(id);
 
     //}while(devNextLevel[(level-1) & 1]);
-}
+}*/
