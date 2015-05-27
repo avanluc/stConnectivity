@@ -6,7 +6,7 @@
 #include <vector>
 #include <../../cub/cub.cuh>
 
-#define N_TEST 100
+#define N_TEST 60
 using namespace std;
 
 // Graph parameters (#nodes, #edges)

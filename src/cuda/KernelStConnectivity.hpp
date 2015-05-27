@@ -228,3 +228,45 @@ __global__ void stConn1(	const int* __restrict__ devNodes,
 
     //}while(devNextLevel[(level-1) & 1]);
 }*/
+
+
+
+
+__device__  __forceinline__ void MVKernel_gm(const bool* A, const bool * X, bool* Y, const int N)
+{
+	int bx = blockIdx.x; 
+	int tx = threadIdx.x; 
+  	int Row = bx * BLOCK_SIZE + tx;
+  
+	float Pvalue = 0;
+
+	for (unsigned int k = 0; k < N; k++)         
+		Pvalue += A[Row*N + k] * X[k];
+
+	__syncthreads();
+
+	if(Row < N)  		
+		Y[Row] = Pvalue;
+	__syncthreads();
+}
+
+
+__global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
+{
+	int bx = blockIdx.x; 
+	int tx = threadIdx.x; 
+  	int i = bx * BLOCK_SIZE + tx;
+  	bool Union = 0;
+
+  	//while()
+  	//{
+	  	if(i < N)
+	  	{
+		  	MVKernel_gm(A, X, Y, N);
+		  	Union = Union & X[i];
+		  	//X[i] = Y[i] & (Union==false);
+		  		
+	  	}
+	  	GlobalSync();
+  	//}
+}

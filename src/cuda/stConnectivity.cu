@@ -142,14 +142,15 @@ int main(int argc, char *argv[]){
 	// printf("Device memory allocated\n");
 	// printf("-----------------------------------\n");
 
- 
+ 	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
  	vector<double> seq_times(N_TEST);
- 	for (int loop = 0; loop < 3; ++loop)
- 	{
+ 	//for (int loop = 0; loop < 3; ++loop)
+ 	//{
+	srand (time(NULL));
 	 	for (int test = 0; test < N_TEST; test++)
 		{
-			srand (time(NULL));
+
 			int source = rand() % N;
 			int target = rand() % N;
 
@@ -250,25 +251,35 @@ int main(int argc, char *argv[]){
 		    //msecTotal1 /= 1000;
 
 			// printf("nodes = %d \tTime = %.3f s\n",nof_distNodes, msecTotal);
-			// printf("Result for st-Connectivity from %d to %d is %c[%d;%dm%s%c[%dm\n", source, target, 27, 0, 
+			//printf("Result for st-Connectivity from %d to %d is %c[%d;%dm%s%c[%dm\n", source, target, 27, 0, 
 			// 												31 + connect,(connect ? "true" : "false"), 27, 0);
-			// printf("Elapsed time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			msecTotal1 = atof(argv[3]);
+			// printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+			// 												test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+			// 												27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			//printf("Elapsed time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal + msecTotal1, 27, 0);
 			// // printf("Parallel time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
 			// // printf("MatrixBFS time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal1, 27, 0);
-			// printf("-----------------------------------\n");
+			//printf("-----------------------------------\n");
 			par_times[test] = msecTotal;
 			seq_times[test] = msecTotal1;
 		}
 		double sum_par = 0;
 		double sum_seq = 0;
-		for (int i = 0; i < N_TEST; ++i){
+		for (int i = 1; i < N_TEST; ++i){
 			sum_par += par_times[i];
 			sum_seq += seq_times[i];
 		}
-		printf("\nAVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / N_TEST, 27, 0);
-		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / N_TEST, 27, 0);
-		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / N_TEST, 27, 0);
-	}
+		printf("\nN: %d\n", nof_distNodes);
+		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
+		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
+		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
+		//mean_times[loop] = (sum_par + sum_seq) / N_TEST;
+	//}
+	//double sum = 0;
+	//for (int i = 0; i < 3; ++i)
+		//sum += mean_times[i];
+	//printf("\t\t\tAVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum) / 3, 27, 0);
 	//free memoria device
 	cudaFree(Dvertex);
     cudaFree(Dedges);
