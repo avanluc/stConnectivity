@@ -173,12 +173,10 @@ __global__ void stConn1(	const int* __restrict__ devNodes,
 						const int nof_distNodes,
 						bool* Matrix){
 //						bool* newLevel) { 
-
 	// Calcolate thread id
     int bx = blockIdx.x;
     int tx = threadIdx.x;
     int id = tx + (bx*BLOCK_SIZE);
-
     //do{
 	    if (id == 0)
 			devNextLevel[((level & 1) + 1) & 1] = false;
@@ -219,13 +217,11 @@ __global__ void stConn1(	const int* __restrict__ devNodes,
 			devNextLevel[level & 1] = true;
 		//	printf("at level %d devNextLevel[%d] = %d\n",level, (level & 1), devNextLevel[level & 1]);
 	    }
-
     	//if(id == 0){
     	//level++;
 		//	printf("at level %d devNextLevel[%d] = %d\n",level, ((level-1) & 1), devNextLevel[(level-1) & 1]);
     	//}
     	//GlobalSync(id);
-
     //}while(devNextLevel[(level-1) & 1]);
 }*/
 
