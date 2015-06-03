@@ -1,10 +1,13 @@
 #include <stConnectivity.hpp>
 
-#define		   BLOCK_SIZE	256
+#define	BLOCK_FRONTIER_LIMIT 1024
+#define	     SMEMORY_SIZE	1024
+#define		   BLOCK_SIZE	1024
 #define		Thread_Per_SM	2048
 #define          N_OF_SMs	12
 #define    MAX_CONCURR_TH	(Thread_Per_SM * N_OF_SMs)
 #define    MAX_CONCURR_BL(BlockDim)	( MAX_CONCURR_TH / (BlockDim) )
+#define 			  Tid 	threadIdx.x
 
 
 __device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
@@ -90,8 +93,7 @@ __device__  __forceinline__ bool stConnCore(const int* __restrict__ devNodes,
 	    {
 			if (Dist_Col[i].x == level) 									// se i è alla distanza giusta (ultima distanza visitata)
 			{
-	    		//printf("Visita partita da %d\n",i);
-				const int2 currDC = Dist_Col[i];
+	    		const int2 currDC = Dist_Col[i];
 	    		for (int j = devNodes[i]; j < devNodes[i + 1]; j++) 		// per ogni vicino di i
 				{
 					const int dest = devEdges[j];
@@ -99,13 +101,11 @@ __device__  __forceinline__ bool stConnCore(const int* __restrict__ devNodes,
 					
 					if(destDC.x != INT_MAX && destDC.y != currDC.y)			// se è già stato visitato da qualcun altro
 					{
-						//printf("\til nodo %d (visitato da %d) ha incontrato %d (visitato da %d)\n", i, currDC.y, dest, destDC.y);
 						Matrix[ currDC.y*nof_distNodes + destDC.y ] = true;	// aggiorna la matrice di adiacenza
 						Matrix[ destDC.y*nof_distNodes + currDC.y ] = true;	// aggiorna la matrice di adiacenza
 					}
 					if (destDC.x == INT_MAX) 								// se non è ancora stato visitato
 					{
-						//printf("\tdal nodo %d visito il nodo %d\n", i, dest);
 						int2 val = make_int2(level + 1,currDC.y);
 						atomicStore(&Dist_Col[dest], val);
 						// Dist_Col[dest].x = level + 1;
@@ -228,7 +228,7 @@ __global__ void stConn1(	const int* __restrict__ devNodes,
 
 
 
-__device__  __forceinline__ void MVKernel_gm(const bool* A, const bool * X, bool* Y, const int N)
+/*__device__  __forceinline__ void MVKernel_gm(const bool* A, const bool * X, bool* Y, const int N)
 {
 	int bx = blockIdx.x; 
 	int tx = threadIdx.x; 
@@ -265,4 +265,49 @@ __global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
 	  	}
 	  	GlobalSync();
   	//}
+}*/
+
+
+__global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
+									const int* __restrict__	devEdge,
+									int* __restrict__	devDistance,
+									const int* __restrict__	devSource,
+									const int Nsources,
+									const int N) {
+
+	int Queue[N];
+	int level = 0;
+	int FrontierSize = Nsources;
+
+	__shared__ int SMemF1[SMEMORY_SIZE];
+	__shared__ int SMemF2[SMEMORY_SIZE];
+
+	SMemF1 = devSource;
+
+	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT) {
+
+		int founds = 0;
+		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
+			const int index = SMemF1[t];
+			const int start = devNode[index];
+			int end = devNode[index + 1];
+
+			for (int k = start; k < end; k++) {
+				const int dest = devEdge[k];
+
+				if (devDistance[dest] == -1) {
+					devDistance[dest] = level;
+					Queue[founds++] = dest;
+				}
+			}
+		}
+
+		//int WarpPos, n, total;
+		//singleblockQueueAdd(founds, F2SizePtr, WarpPos, n, total, level, (int*) &SMem[TEMP_POS]); 	//  Util/GlobalWrite.cu
+
+		//swapDev(SMemF1, SMemF2);
+		level++;
+		__syncthreads();
+		//FrontierSize = F2SizePtr[0];
+	}
 }

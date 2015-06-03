@@ -6,7 +6,7 @@
 #include <vector>
 #include <../../cub/cub.cuh>
 
-#define N_TEST 60
+#define N_TEST 50
 using namespace std;
 
 // Graph parameters (#nodes, #edges)
@@ -60,9 +60,9 @@ int ONodesCompare(const ONodes &a, const ONodes &b){
 /*
 * BFS on adjacency matrix performed on CPU
 */
-bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target) {
+bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue) {
 	int left = 0, right = 1;			// left = # nodi da cui ho fatto la visita, right = # nodi incontrati durante la visita 
-	int* Queue = new int[nof_nodes];	// coda dei nodi da visitare
+	//int* Queue = new int[nof_nodes];	// coda dei nodi da visitare
 	vector<bool> Visited(nof_nodes);	// indica se un nodo è stato visitato
 	
 	Queue[0] = source;					// Si parte dalla sorgente
@@ -78,7 +78,7 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 					Queue[right++] = i;				// lo aggiungo alla coda dei nodi incontrati durante la visita 
 				}
 	}
-	delete [] Queue;
+	//delete [] Queue;
 	return (Visited[target] == true);
 }
 
@@ -86,15 +86,15 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 /*
 * Function that choose nof_distNodes nodes of the graph
 */
-vector< int > ChooseNodes(const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
+void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
 
-	vector< int > distNodes(nof_distNodes);			// vector of distinguished nodes
+	//vector< int > distNodes(nof_distNodes);			// vector of distinguished nodes
 	vector< ONodes > OrderedNodes(nof_nodes);		// vector of nodes ordered by degree
 
-	distNodes[0] = source;
+	sources[0] = source;
 	
 	if(nof_distNodes > 1)
-		distNodes[1] = target;
+		sources[1] = target;
 
 	if(nof_distNodes > 2)
 	{
@@ -109,8 +109,42 @@ vector< int > ChooseNodes(const int* Nodes, const int nof_nodes, const int nof_d
 		sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
 
 		for (int i = 2; i < nof_distNodes; i++)
-				distNodes[i] = OrderedNodes[i].id;
+				sources[i] = OrderedNodes[i].id;
 	}
 
-	return distNodes;
+	return;
+}
+
+
+void GraphToCSR(const edge* graph, int* vertex, int* edges){
+	int j = 0;  // Current adjacency list length
+
+	// for each arc i in the graph
+	for(int i = 0; i < (E); i++)
+	{
+		// if i isn't the first arc and 
+		// the src of i is different from the src of i-1 
+		if(i!=0 && graph[i].x != graph[i-1].x)
+		{
+			// if the difference between arcs sources == 1 then set src pointer
+			if( (graph[i].x - graph[i-1].x) == 1 )
+				vertex[graph[i].x] = vertex[graph[i-1].x] + j;
+			else
+				// else set each pointer between the sources to j
+				for(int l = (graph[i-1].x + 1); l <= N; l++)
+					vertex[l] = vertex[graph[i-1].x] + j;
+			j = 0;
+		}
+		if( i == ((E)-1) && graph[i].x < (N-1)){
+			for (int l = (graph[i].x + 1); l <=N; l++)
+				vertex[l]++;
+		}
+		// Fill adjacency list
+		j++;
+		edges[i] = graph[i].y;
+	}
+
+	// It is convenient to add a N-th element
+	vertex[N] = E;
+	return;
 }
