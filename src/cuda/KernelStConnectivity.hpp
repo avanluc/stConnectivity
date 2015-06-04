@@ -268,7 +268,7 @@ __global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
 }*/
 
 
-__global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
+/*__global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 									const int* __restrict__	devEdge,
 									int* __restrict__	devDistance,
 									const int* __restrict__	devSource,
@@ -311,3 +311,4 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		//FrontierSize = F2SizePtr[0];
 	}
 }
+*/

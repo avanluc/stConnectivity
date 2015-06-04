@@ -13,35 +13,12 @@ int main(int argc, char *argv[]){
 	}
 
 	// Read graph from file
-	int x,y;
-	edge *graph; 
+	edge *graph;
 	ifstream in (argv[1]);
-	if(in.is_open())
-	{
-		// Read graph parameters and allocate memory\n
-		in >> N >> E;
-		graph = (edge*)malloc(E*sizeof(edge));
-
-		// Read graph
-		for(int i = 0; i < E; i++)
-		{	
-			in >> x >> y;
-			graph[i].x = x;
-			graph[i].y = y;
-
-			if(x >= N || y >= N)
-				printf("Error at row %d: node id > # nodes\n", i+2);
-		}
-		// Sorting graph using specified compare function
-		qsort(graph, (E), sizeof(edge), compare);
-	}
-	else
-	{
-		printf("No input file\n");
-		return -1;
-	}
-	in.close();
-
+	in >> N >> E;
+	graph = (edge*)malloc(E*sizeof(edge));
+	ReadGraph(argv[1], graph);
+	
 	// Memory allocation and initialization
 	int *vertex = (int*)calloc(N+1, sizeof(int));
 	int *edges = (int*)calloc(E, sizeof(int));
@@ -69,18 +46,18 @@ int main(int argc, char *argv[]){
 	int nof_distNodes = atoi(argv[2]);
 
 	// calculate size for allocation
-	size_t sizeN = (N+1) * sizeof(int);
-	size_t sizeE = E * sizeof(int);
-	size_t sizeN2 = N * sizeof(int2);
-	size_t sizeN3 = nof_distNodes * sizeof(int);
+	size_t sizeN 	= (N+1) * sizeof(int);
+	size_t sizeE 	= E * sizeof(int);
+	size_t sizeN2 	= N * sizeof(int2);
+	size_t sizeN3 	= nof_distNodes * sizeof(int);
 	size_t sizeMATRIX = nof_distNodes * nof_distNodes * sizeof(bool);
 
 	// Allocate adj matrix in row major
-	bool *matrix = (bool*)calloc(nof_distNodes * nof_distNodes, sizeof(bool));
-	int2 *Dist_Col = (int2*)calloc(N, sizeof(int2));
-	int *Distance = (int*)calloc(nof_distNodes, sizeof(int));	
-	int *sources = (int*)calloc(nof_distNodes, sizeof(int));
-	int *Queue = (int*)calloc(nof_distNodes, sizeof(int));	
+	bool *matrix 	= (bool*)calloc(nof_distNodes * nof_distNodes, sizeof(bool));
+	int2 *Dist_Col 	= (int2*)calloc(N, sizeof(int2));
+	int *Distance 	= (int*)calloc(nof_distNodes, sizeof(int));	
+	int *sources 	= (int*)calloc(nof_distNodes, sizeof(int));
+	int *Queue 		= (int*)calloc(nof_distNodes, sizeof(int));	
 
 	// Allocate device memory
 	int *Dedges;

@@ -148,3 +148,23 @@ void GraphToCSR(const edge* graph, int* vertex, int* edges){
 	vertex[N] = E;
 	return;
 }
+
+
+void ReadGraph(char *file, edge *graph){
+	int x,y;
+	ifstream in (file);
+	if(in.is_open()){
+		in >> N >> E;
+		for(int i = 0; i < E; i++)
+		{	
+			in >> x >> y;
+			graph[i].x = x;
+			graph[i].y = y;
+			if(x >= N || y >= N)
+				printf("Error at row %d: node id > # nodes\n", i+2);
+		}
+		// Sorting graph using specified compare function
+		qsort(graph, (E), sizeof(edge), compare);
+	}
+	return;
+}
