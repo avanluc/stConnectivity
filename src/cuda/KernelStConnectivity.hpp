@@ -9,10 +9,20 @@
 #define    MAX_CONCURR_BL(BlockDim)	( MAX_CONCURR_TH / (BlockDim) )
 #define 			  Tid 	threadIdx.x
 
+#define HASHTABLE_BLOCK_POS  0
+#define END_OF_HASHTABLE	(4096 * 8)	// 8: long long int size
+#define       F2Size_POS	END_OF_HASHTABLE
+#define         TEMP_POS	(F2Size_POS + 4)
+#define     END_TEMP_POS	(TEMP_POS + 32 * 4)
+#define    FRONTIER_SIZE	(((49152 - END_TEMP_POS) / 2) - 2)		//-2 align
+#define     F1_BLOCK_POS	(END_TEMP_POS)
+#define     F2_BLOCK_POS	(F1_BLOCK_POS + FRONTIER_SIZE)
+
 
 __device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
 __device__ bool devNextLevel[4];
 
+extern __shared__ unsigned char SMem[];
 
 /*
 * Self made atomic function to store a int2 value 
@@ -268,7 +278,7 @@ __global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
 }*/
 
 
-/*__global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
+__global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 									const int* __restrict__	devEdge,
 									int* __restrict__	devDistance,
 									const int* __restrict__	devSource,
@@ -279,10 +289,8 @@ __global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
 	int level = 0;
 	int FrontierSize = Nsources;
 
-	__shared__ int SMemF1[SMEMORY_SIZE];
-	__shared__ int SMemF2[SMEMORY_SIZE];
-
-	SMemF1 = devSource;
+	int* SMemF1 = devSource;
+	int* SMemF2 = (int*) &SMem[F2_BLOCK_POS];
 
 	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT) {
 
@@ -302,13 +310,12 @@ __global__ void MatrixBFS(const bool* A, const bool * X, const int N, bool * Y)
 			}
 		}
 
-		//int WarpPos, n, total;
-		//singleblockQueueAdd(founds, F2SizePtr, WarpPos, n, total, level, (int*) &SMem[TEMP_POS]); 	//  Util/GlobalWrite.cu
+		int WarpPos, n, total;
+		write(founds, F2SizePtr, WarpPos, n, total, level, (int*) &SMem[TEMP_POS]); 	//  Util/GlobalWrite.cu
 
-		//swapDev(SMemF1, SMemF2);
+		swapDev(SMemF1, SMemF2);
 		level++;
 		__syncthreads();
-		//FrontierSize = F2SizePtr[0];
+		FrontierSize = F2SizePtr[0];
 	}
 }
-*/
