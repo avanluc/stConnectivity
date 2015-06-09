@@ -4,16 +4,15 @@
 #define				  N_TEST 	1
 
 #define					 Tid 	threadIdx.x
-#define   TOTAL_SM_PER_BLOCK	49152
-#define	BLOCK_FRONTIER_LIMIT 	TOTAL_SM_PER_BLOCK / (2 * sizeof(int))
-#define			SMEMORY_SIZE	1024
 #define			  BLOCK_SIZE	1024
 #define		   Thread_Per_SM	2048
 #define				N_OF_SMs	12
 #define		  MAX_CONCURR_TH	(Thread_Per_SM * N_OF_SMs)
 #define	MAX_CONCURR_BL(BlockDim)	( MAX_CONCURR_TH / (BlockDim) )
 
+#define   TOTAL_SM_PER_BLOCK	49152
 #define	   SM_BYTE_PER_BLOCK	49152
+#define	BLOCK_FRONTIER_LIMIT 	SM_BYTE_PER_BLOCK / (2 * sizeof(int))
 #define			   F1_OFFSET	0
 #define			   F2_OFFSET	SM_BYTE_PER_BLOCK/2
 

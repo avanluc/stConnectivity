@@ -74,8 +74,8 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &DMatrix, sizeMATRIX) );
 	gpuErrchk( cudaMalloc((void **) &Ddist_Col, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, sizeN3) );
-	//printf("Device memory allocated\n");
-	//printf("-----------------------------------\n");
+	printf("Device memory allocated\n");
+	printf("-----------------------------------\n");
 
  	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
@@ -87,6 +87,8 @@ int main(int argc, char *argv[]){
 
 		int source = rand() % N;
 		int target = rand() % N;
+		if(DEBUG)
+			source = 0;
 
 		// choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
 	    ChooseNodes(sources, vertex, N, nof_distNodes, source, target);
@@ -138,7 +140,7 @@ int main(int argc, char *argv[]){
 	    dim3 grid(1, 1);
 	    
 	    //GReset<<< grid, block >>>();
-	    
+	    printf("Lanch Kernel\n");
 	    //stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, N, nof_distNodes, DMatrix);
 	    BFS_BlockKernel<<< grid, block, SM_BYTE_PER_BLOCK>>>(Dvertex, Dedges, Ddist_Col, Dsources, nof_distNodes);
 
@@ -173,7 +175,7 @@ int main(int argc, char *argv[]){
 	    float msecTotal = 0.0f;
 	    float msecTotal1 = 0.0f;
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
-	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
+	    //gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
 	    if(!DEBUG){
 			printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 

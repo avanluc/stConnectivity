@@ -2,6 +2,7 @@
 
 #include "prefixSumAsm.cu"
 #include "GlobalSync.cu"
+#include <assert.h>
 
 __device__ int GlobalCounter;
 
@@ -19,7 +20,29 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
     return;
 }
 
+__device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int founds, int& n, int &totalBlock, int& globalOffset) {
+	int* SM = (int*) SMem;
+	n = founds;
+	const int warpId = WarpID();
+	SM[warpId] = warpExclusiveScan<32>(n);
 
+	__syncthreads();
+	if (Tid < BLOCK_SIZE / 32) {
+		int sum = SM[Tid];
+		const int total = warpExclusiveScan<BLOCK_SIZE / 32>(sum);
+
+		if (Tid == 0) {
+			SM[32] = total;
+			SM[33] = atomicAdd(GlobalCounter, total);
+		}
+		SM[Tid] = sum;
+	}
+	__syncthreads();
+
+	n += SM[warpId];
+	totalBlock = SM[32];
+	globalOffset = SM[33];
+}
 
 __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int founds, int& n, int &totalWarp, int& globalOffset) {
 		n = founds;
@@ -36,12 +59,13 @@ __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int fou
 __device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
 		
 		int n, total, globalOffset;
-		FrontierReserve_Warp(GlobalCounter, founds, n, total, globalOffset);
+		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
 
 		const int pos = globalOffset + n;
 		for (int i = 0; i < founds; i++){
+			//printf("\t\twriting %d at position %d\n", Queue[i], pos+i);
+			assert((pos + i) < BLOCK_FRONTIER_LIMIT);
 			devFrontier[pos + i] = Queue[i];
-			//printf("thread %d writing %d at position %d\n", Tid, Queue[i], pos + i);
 		}
 }
 
@@ -75,18 +99,20 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		int founds = 0;
 		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
 			const int index = SMemF1[t];
-			printf("Visiting node %d\n", index );
 			const int start = devNode[index];
 			int end = devNode[index + 1];
 
+			printf("Thread %d visiting node %d\n", Tid, index );
 			for (int k = start; k < end; k++) {
 				const int dest = devEdge[k];
+				//printf("   Thread %d vede nodo %d\n", Tid, dest);
 
 				if (devDistance[dest].x == INT_MAX) {
-					int2 temp = make_int2(level, 0);
-					atomicStore(&devDistance[dest], temp);
+					atomicCAS(&devDistance[dest].x, INT_MAX, level);
+					if(devDistance[dest].x == level)
 					//devDistance[dest].x = level;
-					Queue[founds++] = dest;
+						Queue[founds++] = dest;
+						printf("\tThread %d aggiunge il nodo %d\n", Tid, dest );
 				}
 			}
 		}
@@ -98,5 +124,9 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		level++;
 		__syncthreads();
 		FrontierSize = GlobalCounter;
+		if (Tid == 0)
+			printf("Livello %d: and FrontierSize = %d < %d\n", level, FrontierSize, BLOCK_FRONTIER_LIMIT);
+		__syncthreads();
+		GlobalCounter = 0;
 	}
 }
