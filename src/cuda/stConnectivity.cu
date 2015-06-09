@@ -1,4 +1,4 @@
-#include <KernelStConnectivity_WEfficient.hpp>
+#include <KernelStConnectivity_WEfficient.cuh>
 
 using namespace std;
 
@@ -62,11 +62,11 @@ int main(int argc, char *argv[]){
 	// Allocate device memory
 	int *Dedges;
 	int *Dvertex;
-	bool *DMatrix;
-	int2 *Ddist_Col;
-	bool *DnewLevel;
 	int *Ddistance;
 	int *Dsources;
+	int2 *Ddist_Col;
+	bool *DMatrix;
+	//bool *DnewLevel;
 
 	gpuErrchk( cudaMalloc((void **) &Dvertex, sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN3) );
@@ -89,7 +89,6 @@ int main(int argc, char *argv[]){
 		int target = rand() % N;
 
 		// choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
-	    //vector< int > id = ChooseNodes(vertex, N, nof_distNodes, source, target);
 	    ChooseNodes(sources, vertex, N, nof_distNodes, source, target);
 
 	    // inizializzazione dei valori a INT_MAX
@@ -108,7 +107,7 @@ int main(int argc, char *argv[]){
 			Distance[i] = INT_MAX;
 		}
 		Distance[0] = 0;
-		bool NextLevel[4] = {0,0,0,0};
+		//bool NextLevel[4] = {0,0,0,0};
 		
 	    // Copy host memory for vertex, edges and results vectors to device
 	    gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN, cudaMemcpyHostToDevice) );
@@ -117,7 +116,7 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaMemcpy(Ddist_Col, Dist_Col, sizeN2, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN3, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpyToSymbolAsync(devNextLevel, NextLevel, sizeof(bool)*4, 0,cudaMemcpyHostToDevice) );
+	    //gpuErrchk( cudaMemcpyToSymbolAsync(devNextLevel, NextLevel, sizeof(bool)*4, 0,cudaMemcpyHostToDevice) );
 
 		// Allocate CUDA events to be used for timing
 	    cudaEvent_t start;
@@ -143,6 +142,7 @@ int main(int argc, char *argv[]){
 	    //stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, N, nof_distNodes, DMatrix);
 	    BFS_BlockKernel<<< grid, block, SM_BYTE_PER_BLOCK>>>(Dvertex, Dedges, Ddist_Col, Dsources, nof_distNodes);
 
+
 		// Print matrix
 		// gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMATRIX, cudaMemcpyDeviceToHost) );
 		// for (int i = 0; i < nof_distNodes; ++i)
@@ -156,14 +156,18 @@ int main(int argc, char *argv[]){
 		
 	    gpuErrchk( cudaEventRecord(stop, NULL) );
 	    gpuErrchk( cudaEventSynchronize(stop) );
-	    gpuErrchk( cudaEventRecord(start1, NULL) );
 
-	    // Copy result vector from device to host
-		//gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMATRIX, cudaMemcpyDeviceToHost) );
-		//bool connect = MatrixBFS(matrix, nof_distNodes, 0, 1, Queue);
+	    bool connect = false;
+	    if(!DEBUG){
+		    gpuErrchk( cudaEventRecord(start1, NULL) );
 
-		gpuErrchk( cudaEventRecord(stop1, NULL) );
-	    gpuErrchk( cudaEventSynchronize(stop1) );
+		    // Copy result vector from device to host
+			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMATRIX, cudaMemcpyDeviceToHost) );
+			connect = MatrixBFS(matrix, nof_distNodes, 0, 1, Queue);
+			gpuErrchk( cudaEventRecord(stop1, NULL) );
+		    gpuErrchk( cudaEventSynchronize(stop1) );
+	    }
+
 
 	    // Claculate elapsed time
 	    float msecTotal = 0.0f;
@@ -171,14 +175,12 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
-		//msecTotal1 = atof(argv[3]);
-		//printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
-		//												test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
-		//												27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
-		//printf("Elapsed time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal + msecTotal1, 27, 0);
-		//printf("Parallel time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
-		//printf("MatrixBFS time \t= %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal1, 27, 0);
-		//printf("-----------------------------------\n");
+	    if(!DEBUG){
+			printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			printf("-----------------------------------\n");	
+	    }
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;
 	}
@@ -188,10 +190,12 @@ int main(int argc, char *argv[]){
 		sum_par += par_times[i];
 		sum_seq += seq_times[i];
 	}
-	// printf("\nN: %d\n", nof_distNodes);
-	// printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
-	// printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
-	// printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
+	if(!DEBUG){
+		printf("\nN: %d\n", nof_distNodes);
+		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
+		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
+		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
+	}
 
 	//free memoria device
 	cudaFree(Dvertex);

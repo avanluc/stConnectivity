@@ -1,33 +1,7 @@
+#pragma once
 
 #include "prefixSumAsm.cu"
-
-#define	BLOCK_FRONTIER_LIMIT 1024
-#define	     SMEMORY_SIZE	1024
-#define		   BLOCK_SIZE	1024
-#define		Thread_Per_SM	2048
-#define          N_OF_SMs	12
-#define    MAX_CONCURR_TH	(Thread_Per_SM * N_OF_SMs)
-#define    MAX_CONCURR_BL(BlockDim)	( MAX_CONCURR_TH / (BlockDim) )
-#define 			  Tid 	threadIdx.x
-
-/*#define HASHTABLE_BLOCK_POS  0
-#define END_OF_HASHTABLE	(4096 * 8)	// 8: long long int size
-#define       F2Size_POS	END_OF_HASHTABLE
-#define         TEMP_POS	(F2Size_POS + 4)
-#define     END_TEMP_POS	(TEMP_POS + 32 * 4)
-#define    FRONTIER_SIZE	(((49152 - END_TEMP_POS) / 2) - 2)		//-2 align
-#define     F1_BLOCK_POS	(END_TEMP_POS)
-#define     F2_BLOCK_POS	(F1_BLOCK_POS + FRONTIER_SIZE)
-*/
-
-#define SM_BYTE_PER_BLOCK	40960
-#define SM_BIT_PER_BLOCK	SM_BYTE_PER_BLOCK * 8
-#define         F1_OFFSET	0
-#define         F2_OFFSET	SM_BIT_PER_BLOCK/2
-
-
-__device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
-__device__ bool devNextLevel[4];
+#include "GlobalSync.cu"
 
 __device__ int GlobalCounter;
 
@@ -45,53 +19,6 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
     return;
 }
 
-
-/*__device__ __forceinline__ int LaneID() {
-    int ret;
-    asm("mov.u32 %0, %laneid;" : "=r"(ret) );
-    return ret;
-}*/
-
-
-__global__ void GReset() {
-	int bx = blockIdx.x;
-    int tx = threadIdx.x;
-    int id = tx + (bx*BLOCK_SIZE);
-	if (id < MAX_CONCURR_BL(BLOCK_SIZE))
-		GSync[id] = 0;
-}
-
-
-/*
-*	Glocal Syncronization function
-*/
-__device__  __forceinline__ void GlobalSync() {
-	volatile unsigned *VolatilePtr = GSync;
-	__syncthreads();
-	
-	if (blockIdx.x == 0) {
-		if (threadIdx.x == 0){
-			VolatilePtr[blockIdx.x] = 1;
-		}
-		//__syncthreads();
-
-		if (threadIdx.x < MAX_CONCURR_BL(BLOCK_SIZE))
-			while ( cub::ThreadLoad<cub::LOAD_CG>(GSync + threadIdx.x) == 0 );
-
-		__syncthreads();
-
-		if (threadIdx.x < MAX_CONCURR_BL(BLOCK_SIZE)){
-			VolatilePtr[threadIdx.x] = 0;
-		}
-	}
-	else {
-		if (threadIdx.x == 0) {
-			VolatilePtr[blockIdx.x] = 1;
-			while (cub::ThreadLoad<cub::LOAD_CG>(GSync + blockIdx.x) == 1);
-		}
-		__syncthreads();
-	}
-}
 
 
 __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int founds, int& n, int &totalWarp, int& globalOffset) {
@@ -114,15 +41,19 @@ __device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int*
 		const int pos = globalOffset + n;
 		for (int i = 0; i < founds; i++){
 			devFrontier[pos + i] = Queue[i];
-			printf("thread %d writing %d at position %d\n", Tid, Queue[i], pos + i);
+			//printf("thread %d writing %d at position %d\n", Tid, Queue[i], pos + i);
 		}
 }
+
+
 
 __device__ __forceinline__ void swapDev(int*& A, int*& B) {
 	int* temp = A;	// frontiers swap
 	A = B;
 	B = temp;
 }
+
+
 
 __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 									const int* __restrict__	devEdge,
@@ -139,11 +70,12 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 	if (Tid < FrontierSize)
 		SMemF1[Tid] = devSource[Tid]; 
 
-	//while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT) {
+	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT) {
 
 		int founds = 0;
 		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
 			const int index = SMemF1[t];
+			printf("Visiting node %d\n", index );
 			const int start = devNode[index];
 			int end = devNode[index + 1];
 
@@ -166,5 +98,5 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		level++;
 		__syncthreads();
 		FrontierSize = GlobalCounter;
-	//}
+	}
 }

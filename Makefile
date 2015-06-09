@@ -8,4 +8,5 @@ seq:
 	g++ -o2 src/seq/stConnectivity.cpp src/seq/stConnectivity.hpp -o ./build/seq/stConnectivity
 
 clean:
-	rm -rf ./build/*
+	rm -rf ./build/cuda/*
+	rm -rf ./build/seq/*

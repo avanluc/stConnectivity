@@ -4,14 +4,11 @@
 #include <climits>
 #include <stdlib.h>
 #include <vector>
-#include <../../cub/cub.cuh>
+#include "definition.cuh"
 
-#define 			  Tid 	threadIdx.x
-#define N_TEST 1
 using namespace std;
 
 // Graph parameters (#nodes, #edges)
-const int REG_QUEUE  = 	32;
 int  N, E;
 
 // Edge structure
@@ -39,7 +36,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
       if (abort) exit(code);
    }
 }
-
 
 /*
 * Compare function for sorting
