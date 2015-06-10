@@ -12,9 +12,11 @@
 
 #define   TOTAL_SM_PER_BLOCK	49152
 #define	   SM_BYTE_PER_BLOCK	49152
-#define	BLOCK_FRONTIER_LIMIT 	SM_BYTE_PER_BLOCK / (2 * sizeof(int))
+#define       	  F2Size_POS	(SM_BYTE_PER_BLOCK - 16)
+#define	BLOCK_FRONTIER_LIMIT 	(SM_BYTE_PER_BLOCK / (2 * sizeof(int)))
 #define			   F1_OFFSET	0
-#define			   F2_OFFSET	SM_BYTE_PER_BLOCK/2
+#define			   F2_OFFSET	(SM_BYTE_PER_BLOCK / 2)
+
 
 /*
 #define HASHTABLE_BLOCK_POS  0

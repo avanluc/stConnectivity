@@ -48,31 +48,30 @@ int main(int argc, char *argv[]){
 	// calculate size for allocation
 	size_t sizeN 	= (N+1) * sizeof(int);
 	size_t sizeE 	= E * sizeof(int);
-	size_t sizeN2 	= N * sizeof(int2);
+	size_t sizeN2 	= N * sizeof(int);
 	size_t sizeN3 	= nof_distNodes * sizeof(int);
 	size_t sizeMATRIX = nof_distNodes * nof_distNodes * sizeof(bool);
 
 	// Allocate adj matrix in row major
-	bool *matrix 	= (bool*)calloc(nof_distNodes * nof_distNodes, sizeof(bool));
-	int2 *Dist_Col 	= (int2*)calloc(N, sizeof(int2));
-	int *Distance 	= (int*)calloc(nof_distNodes, sizeof(int));	
+	int *Color 		= (int*)calloc(N, sizeof(int));
+	int *Distance 	= (int*)calloc(N, sizeof(int));	
 	int *sources 	= (int*)calloc(nof_distNodes, sizeof(int));
 	int *Queue 		= (int*)calloc(nof_distNodes, sizeof(int));	
+	bool *matrix 	= (bool*)calloc(nof_distNodes * nof_distNodes, sizeof(bool));
 
 	// Allocate device memory
 	int *Dedges;
 	int *Dvertex;
-	int *Ddistance;
 	int *Dsources;
-	int2 *Ddist_Col;
+	int *Ddistance;
+	int *Dcolor;
 	bool *DMatrix;
-	//bool *DnewLevel;
 
 	gpuErrchk( cudaMalloc((void **) &Dvertex, sizeN) );
-	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN3) );
 	gpuErrchk( cudaMalloc((void **) &Dedges, sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, sizeMATRIX) );
-	gpuErrchk( cudaMalloc((void **) &Ddist_Col, sizeN2) );
+	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN2) );
+	gpuErrchk( cudaMalloc((void **) &Dcolor, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, sizeN3) );
 	printf("Device memory allocated\n");
 	printf("-----------------------------------\n");
@@ -96,27 +95,25 @@ int main(int argc, char *argv[]){
 	    // inizializzazione dei valori a INT_MAX
 	    for (int i = 0; i < N; i++)
 	    {
-	    	Dist_Col[i].x = INT_MAX;
-			Dist_Col[i].y = INT_MAX;
+	    	Distance[i] = INT_MAX;
+			Color[i] = INT_MAX;
 	    }
 
 	    // inizializzazione dei valori dei nodi distinti a Distance 0 e Color id
 	    for (int i = 0; i < nof_distNodes; i++)
 		{
 			int j = sources[i];
-			Dist_Col[j].x = 0;
-			Dist_Col[j].y = i;
-			Distance[i] = INT_MAX;
+			Distance[j] = 0;
+			Color[j] = i;
 		}
 		Distance[0] = 0;
-		//bool NextLevel[4] = {0,0,0,0};
 		
 	    // Copy host memory for vertex, edges and results vectors to device
 	    gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dedges, edges, sizeE, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMATRIX, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Ddist_Col, Dist_Col, sizeN2, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN3, cudaMemcpyHostToDevice) );
+	    gpuErrchk( cudaMemcpy(Dcolor, Color, sizeN2, cudaMemcpyHostToDevice) );
+	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN2, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );
 	    //gpuErrchk( cudaMemcpyToSymbolAsync(devNextLevel, NextLevel, sizeof(bool)*4, 0,cudaMemcpyHostToDevice) );
 
@@ -142,7 +139,7 @@ int main(int argc, char *argv[]){
 	    //GReset<<< grid, block >>>();
 	    printf("Lanch Kernel\n");
 	    //stConn<<< grid, block >>>(Dvertex, Dedges, Ddist_Col, N, nof_distNodes, DMatrix);
-	    BFS_BlockKernel<<< grid, block, SM_BYTE_PER_BLOCK>>>(Dvertex, Dedges, Ddist_Col, Dsources, nof_distNodes);
+	    BFS_BlockKernel<<< grid, block, SM_BYTE_PER_BLOCK>>>(Dvertex, Dedges, Dsources, Ddistance, Dcolor, DMatrix, nof_distNodes);
 
 
 		// Print matrix
@@ -160,7 +157,7 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaEventSynchronize(stop) );
 
 	    bool connect = false;
-	    if(!DEBUG){
+	    if(DEBUG){
 		    gpuErrchk( cudaEventRecord(start1, NULL) );
 
 		    // Copy result vector from device to host
@@ -177,7 +174,7 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
 	    //gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
-	    if(!DEBUG){
+	    if(DEBUG){
 			printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
@@ -203,12 +200,12 @@ int main(int argc, char *argv[]){
 	cudaFree(Dvertex);
     cudaFree(Dedges);
     cudaFree(DMatrix);
-    cudaFree(Ddist_Col);
+    cudaFree(Dcolor);
     cudaFree(Ddistance);
 
     free(Queue);
 	free(matrix);
-	free(Dist_Col);
+	free(Color);
 	free(Distance);
 	free(vertex);
 	free(edges);

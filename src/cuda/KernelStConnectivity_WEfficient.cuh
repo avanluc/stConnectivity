@@ -20,6 +20,8 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
     return;
 }
 
+
+
 __device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int founds, int& n, int &totalBlock, int& globalOffset) {
 	int* SM = (int*) SMem;
 	n = founds;
@@ -44,6 +46,8 @@ __device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int fo
 	globalOffset = SM[33];
 }
 
+
+
 __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int founds, int& n, int &totalWarp, int& globalOffset) {
 		n = founds;
 		totalWarp = warpExclusiveScan<32>(n);
@@ -56,12 +60,15 @@ __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int fou
 
 
 
-__device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
+__device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds, int* F2SizePtr) {
 		
 		int n, total, globalOffset;
 		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
 
+		//F2SizePtr[0] = total;
 		const int pos = globalOffset + n;
+		// if(LaneID() == 0)
+		// 	printf("\t\tThread %d has \tglobalOffset %d, n %d, total %d and pos %d\n", Tid, globalOffset, n, total, pos);
 		for (int i = 0; i < founds; i++){
 			//printf("\t\twriting %d at position %d\n", Queue[i], pos+i);
 			assert((pos + i) < BLOCK_FRONTIER_LIMIT);
@@ -81,8 +88,10 @@ __device__ __forceinline__ void swapDev(int*& A, int*& B) {
 
 __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 									const int* __restrict__	devEdge,
-									int2* __restrict__	devDistance,
-									int* __restrict__	devSource,
+									const int* __restrict__	devSource,
+									int* __restrict__	devDistance,
+									int* __restrict__	devColor,
+									bool* __restrict__ Matrix,
 									const int Nsources) {
 	int Queue[REG_QUEUE];
 	int level = 0;
@@ -90,6 +99,7 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	int* SMemF2 = (int*) &SMem[F2_OFFSET];
+	int* F2SizePtr = (int*) &SMem[F2Size_POS];
 
 	if (Tid < FrontierSize)
 		SMemF1[Tid] = devSource[Tid]; 
@@ -100,29 +110,34 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
 			const int index = SMemF1[t];
 			const int start = devNode[index];
+			const int currCol = devColor[index];
 			int end = devNode[index + 1];
 
-			printf("Thread %d visiting node %d\n", Tid, index );
+			//printf("Thread %d visiting node %d\n", Tid, index );
 			for (int k = start; k < end; k++) {
 				const int dest = devEdge[k];
-				//printf("   Thread %d vede nodo %d\n", Tid, dest);
 
-				if (devDistance[dest].x == INT_MAX) {
-					atomicCAS(&devDistance[dest].x, INT_MAX, level);
-					if(devDistance[dest].x == level)
-					//devDistance[dest].x = level;
-						Queue[founds++] = dest;
-						printf("\tThread %d aggiunge il nodo %d\n", Tid, dest );
+				//atomicCAS(&devDistance[dest], INT_MAX, level);
+				if (devDistance[dest] == INT_MAX) {
+					devDistance[dest] = level;
+					devColor[dest] = currCol;
+					Queue[founds++] = dest;
+					//printf("\tThread %d aggiunge il nodo %d con colore %d e distanza %d\n", Tid, dest , devColor[dest], devDistance[dest]);
+				}
+				else{
+					Matrix[ currCol*Nsources + devColor[dest] ] = true;	// aggiorna la matrice di adiacenza
+					Matrix[ devColor[dest]*Nsources + currCol ] = true;	// aggiorna la matrice di adiacenza
 				}
 			}
 		}
 
 		int WarpPos, n, total;
-		Write(SMemF2, &GlobalCounter, Queue, founds); 	//  Util/GlobalWrite.cu
+		Write(SMemF2, &GlobalCounter, Queue, founds, F2SizePtr); 	//  Util/GlobalWrite.cu
 
 		swapDev(SMemF1, SMemF2);
 		level++;
 		__syncthreads();
+		//FrontierSize = F2SizePtr[0];
 		FrontierSize = GlobalCounter;
 		if (Tid == 0)
 			printf("Livello %d: and FrontierSize = %d < %d\n", level, FrontierSize, BLOCK_FRONTIER_LIMIT);
