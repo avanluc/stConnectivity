@@ -12,12 +12,13 @@
 
 #define   TOTAL_SM_PER_BLOCK	49152
 #define	   SM_BYTE_PER_BLOCK	49152
-#define       	  F2Size_POS	(SM_BYTE_PER_BLOCK - 16)
-#define	BLOCK_FRONTIER_LIMIT 	(SM_BYTE_PER_BLOCK / (2 * sizeof(int)))
+#define       	  F2Size_POS	(SM_BYTE_PER_BLOCK - (sizeof(int) * 2))
+#define	BLOCK_FRONTIER_LIMIT 	(F2Size_POS / (2 * sizeof(int)))
 #define			   F1_OFFSET	0
-#define			   F2_OFFSET	(SM_BYTE_PER_BLOCK / 2)
+#define			   F2_OFFSET	(F2Size_POS / 2)
 
 
+const int REG_QUEUE  = 	32;
 /*
 #define HASHTABLE_BLOCK_POS  0
 #define END_OF_HASHTABLE	(4096 * 8)	// 8: long long int size
@@ -28,5 +29,3 @@
 #define     F1_BLOCK_POS	(END_TEMP_POS)
 #define     F2_BLOCK_POS	(F1_BLOCK_POS + FRONTIER_SIZE)
 */
-
-const int REG_QUEUE  = 	32;

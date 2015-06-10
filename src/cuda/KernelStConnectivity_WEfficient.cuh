@@ -60,17 +60,13 @@ __device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int fou
 
 
 
-__device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds, int* F2SizePtr) {
+__device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
 		
 		int n, total, globalOffset;
 		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
 
-		//F2SizePtr[0] = total;
 		const int pos = globalOffset + n;
-		// if(LaneID() == 0)
-		// 	printf("\t\tThread %d has \tglobalOffset %d, n %d, total %d and pos %d\n", Tid, globalOffset, n, total, pos);
 		for (int i = 0; i < founds; i++){
-			//printf("\t\twriting %d at position %d\n", Queue[i], pos+i);
 			assert((pos + i) < BLOCK_FRONTIER_LIMIT);
 			devFrontier[pos + i] = Queue[i];
 		}
@@ -132,16 +128,15 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		}
 
 		int WarpPos, n, total;
-		Write(SMemF2, &GlobalCounter, Queue, founds, F2SizePtr); 	//  Util/GlobalWrite.cu
+		Write(SMemF2, &F2SizePtr[0], Queue, founds); 	//  Util/GlobalWrite.cu
 
 		swapDev(SMemF1, SMemF2);
 		level++;
 		__syncthreads();
-		//FrontierSize = F2SizePtr[0];
-		FrontierSize = GlobalCounter;
-		if (Tid == 0)
-			printf("Livello %d: and FrontierSize = %d < %d\n", level, FrontierSize, BLOCK_FRONTIER_LIMIT);
+		FrontierSize = F2SizePtr[0];
+		// if (Tid == 0)
+		// 	printf("Livello %d: and FrontierSize = %d < %d\n", level, FrontierSize, BLOCK_FRONTIER_LIMIT);
 		__syncthreads();
-		GlobalCounter = 0;
+		F2SizePtr[0] = 0;
 	}
 }

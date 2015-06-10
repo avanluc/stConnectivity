@@ -73,8 +73,8 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &Dcolor, sizeN2) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, sizeN3) );
-	printf("Device memory allocated\n");
-	printf("-----------------------------------\n");
+	// printf("Device memory allocated\n");
+	// printf("-----------------------------------\n");
 
  	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
@@ -86,8 +86,10 @@ int main(int argc, char *argv[]){
 
 		int source = rand() % N;
 		int target = rand() % N;
-		if(DEBUG)
+		if(DEBUG){
 			source = 0;
+			target = 236257;
+		}
 
 		// choose nof_distNodes distinguished nodes with source and target in it and return a vector of them	
 	    ChooseNodes(sources, vertex, N, nof_distNodes, source, target);
@@ -172,12 +174,14 @@ int main(int argc, char *argv[]){
 	    float msecTotal = 0.0f;
 	    float msecTotal1 = 0.0f;
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
-	    //gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
+	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
 	    if(DEBUG){
 			printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			printf("Parallel Time : %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
+
 			printf("-----------------------------------\n");	
 	    }
 		par_times[test] = msecTotal;
