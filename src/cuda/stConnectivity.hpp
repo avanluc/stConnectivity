@@ -4,6 +4,7 @@
 #include <climits>
 #include <stdlib.h>
 #include <vector>
+#include <iomanip>
 #include "definition.cuh"
 
 using namespace std;
@@ -87,7 +88,7 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
 
 	//vector< int > distNodes(nof_distNodes);			// vector of distinguished nodes
-	vector< ONodes > OrderedNodes(nof_nodes);		// vector of nodes ordered by degree
+	//vector< ONodes > OrderedNodes(nof_nodes);		// vector of nodes ordered by degree
 
 	sources[0] = source;
 	
@@ -96,7 +97,7 @@ void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int 
 
 	if(nof_distNodes > 2)
 	{
-		for (int i = 0; i < nof_nodes; ++i)
+		/*for (int i = 0; i < nof_nodes; ++i)
 		{
 			OrderedNodes[i].id = i;
 			if(i == source || i == target)
@@ -104,12 +105,21 @@ void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int 
 			else
 				OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
 		}
-		sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
-
-		for (int i = 2; i < nof_distNodes; i++)
-				sources[i] = OrderedNodes[i].id;
+		sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);*/
+		//srand (time(NULL));
+		for (int i = 2; i < nof_distNodes; i++){
+			bool isGood = 1;
+			sources[i] = rand() % N;
+			for(int j = 0; j < i; j++){
+				if(sources[j] == sources[i]){
+					isGood = 0;
+					break;
+				}
+			}
+			if (!isGood)
+				i--;
+		}
 	}
-
 	return;
 }
 
@@ -118,30 +128,26 @@ void GraphToCSR(const edge* graph, int* vertex, int* edges){
 	int j = 0;  // Current adjacency list length
 
 	// for each arc i in the graph
-	for(int i = 0; i < (E); i++)
-	{
+	for(int i = 0; i < (E); i++){
 		// if i isn't the first arc and 
 		// the src of i is different from the src of i-1 
-		if(i!=0 && graph[i].x != graph[i-1].x)
-		{
+		if(i!=0 && graph[i].x != graph[i-1].x){
 			// if the difference between arcs sources == 1 then set src pointer
 			if( (graph[i].x - graph[i-1].x) == 1 )
 				vertex[graph[i].x] = vertex[graph[i-1].x] + j;
+			// else set each pointer between the sources to j
 			else
-				// else set each pointer between the sources to j
 				for(int l = (graph[i-1].x + 1); l <= N; l++)
 					vertex[l] = vertex[graph[i-1].x] + j;
 			j = 0;
 		}
-		if( i == ((E)-1) && graph[i].x < (N-1)){
+		if( i == ((E)-1) && graph[i].x < (N-1))
 			for (int l = (graph[i].x + 1); l <=N; l++)
 				vertex[l]++;
-		}
 		// Fill adjacency list
 		j++;
 		edges[i] = graph[i].y;
 	}
-
 	// It is convenient to add a N-th element
 	vertex[N] = E;
 	return;
@@ -153,8 +159,7 @@ void ReadGraph(char *file, edge *graph){
 	ifstream in (file);
 	if(in.is_open()){
 		in >> N >> E;
-		for(int i = 0; i < E; i++)
-		{	
+		for(int i = 0; i < E; i++){	
 			in >> x >> y;
 			graph[i].x = x;
 			graph[i].y = y;

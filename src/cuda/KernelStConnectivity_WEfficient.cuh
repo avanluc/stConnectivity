@@ -5,6 +5,7 @@
 #include <assert.h>
 
 //__device__ int GlobalCounter = 0;
+__device__ int globalMax = 0;
 
 extern __shared__ unsigned char SMem[];
 
@@ -67,8 +68,36 @@ __device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int*
 
 		const int pos = globalOffset + n;
 		for (int i = 0; i < founds; i++){
-			assert((pos + i) < BLOCK_FRONTIER_LIMIT);
-			devFrontier[pos + i] = Queue[i];
+			cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
+			if((pos + i) < BLOCK_FRONTIER_LIMIT)
+				devFrontier[pos + i] = Queue[i];
+		}
+}
+
+__device__ __forceinline__ void Write1(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
+		
+		int n, total, globalOffset;
+		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
+		int* SM = (int*) SMem;
+		int j = 0;
+		while (total > 0) 
+		{
+			__syncthreads();
+			while (j < founds && n + j < IntSMem_Per_Block(BLOCK_SIZE) ) {
+				SM[n + j] = Queue[j];
+				j++;
+			}
+			__syncthreads();
+
+			#pragma unroll
+			for (int i = 0; i < IntSMem_Per_Thread; ++i) {
+				const int index = Tid + i * BLOCK_SIZE;
+				if (index < total)
+					devFrontier[globalOffset + index] = SM[index];
+			}
+			n -= IntSMem_Per_Block(BLOCK_SIZE);
+			total -= IntSMem_Per_Block(BLOCK_SIZE);
+			globalOffset += IntSMem_Per_Block(BLOCK_SIZE);
 		}
 }
 
@@ -90,19 +119,22 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 									const int Nsources) {
 	int Queue[REG_QUEUE];
 	int level = 0;
-	int FrontierSize = Nsources;
+	//int FrontierSize = Nsources;
+	int FrontierSize = 1;
 
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
-	int* SMemF2 = (int*) &SMem[F2_OFFSET];
+	//int* SMemF2 = (int*) &SMem[F2_OFFSET];
 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
 
 	if (Tid < FrontierSize)
-		SMemF1[Tid] = devSource[Tid]; 
+		SMemF1[Tid] = devSource[blockIdx.x]; 
+		//SMemF1[Tid] = devSource[Tid]; 
 
-	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT ) {
+	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
+	{
 
 		int founds = 0;
-		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
+		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE){
 			const int index = SMemF1[t];
 			const int start = devNode[index];
 			const int2 current = devDistance[index];
@@ -113,32 +145,50 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 				const int2 destination = devDistance[dest];			
 
 				/* add dest to the queue */
-				//int old = atomicCAS(&devDistance[dest], INT_MAX, level);
- 				//if (old == INT_MAX) {	
-				if (destination.x == INT_MAX) {	
-					devDistance[dest].x = level;
-					devDistance[dest].y = current.y;
-					Queue[founds++] = dest;
+				if(ATOMIC)
+				{
+					if (atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX) {	
+						devDistance[dest].x = level;
+						devDistance[dest].y = current.y;
+						Queue[founds++] = dest;
+					}
+					/* update adj matrix */
+					else if (destination.y != current.y && destination.y < Nsources){	
+						Matrix[ (current.y * Nsources) + destination.y ] = true;	
+						Matrix[ (destination.y * Nsources) + current.y ] = true;	
+					}
 				}
-				/* update adj matrix */
-				else if (destination.y != current.y && destination.y < Nsources){	
-					Matrix[ (current.y * Nsources) + destination.y ] = true;	
-					Matrix[ (destination.y * Nsources) + current.y ] = true;	
+				else
+				{
+					if (destination.x == INT_MAX) {	
+						devDistance[dest].x = level;
+						devDistance[dest].y = current.y;
+						Queue[founds++] = dest;
+					}
+					else if (destination.y != current.y && destination.y < Nsources){	
+						Matrix[ (current.y * Nsources) + destination.y ] = true;	
+						Matrix[ (destination.y * Nsources) + current.y ] = true;	
+					}
 				}
 			}
 		}
 		
 		int WarpPos, n, total;
-		Write(SMemF2, &F2SizePtr[0], Queue, founds);
+		Write(SMemF1, &F2SizePtr[0], Queue, founds);
 
-		swapDev(SMemF1, SMemF2);
+		//swapDev(SMemF1, SMemF2);
 		level++;
 
 		FrontierSize = F2SizePtr[0];
 
 		__syncthreads();
 		F2SizePtr[0] = 0;
+		if(Tid == 0 && FrontierSize > globalMax)
+			atomicCAS(&globalMax, globalMax, FrontierSize);
 	}
+	//if(Tid == 0)
+		//printf("%d,%d:Max FrontierSize = %d\n",blockIdx.x, Tid, globalMax );
+		//printf("%d,%d: FrontierSize = %d\n", level, blockIdx.x, FrontierSize );
 }
 
 

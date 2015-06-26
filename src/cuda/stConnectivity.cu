@@ -65,7 +65,19 @@ int main(int argc, char *argv[]){
 	//gpuErrchk( cudaMalloc((void **) &Dcolor, 	sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeN3) );
 	printf("Device memory allocated\n");
-	printf("-----------------------------------\n");
+
+	cout << "\n---------------------KERNEL INFO---------------------" 					<< endl
+    	 << "            Block dimension : " <<  BLOCK_SIZE 							<< endl
+    	 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< endl
+    	 << "   Number of current blocks : " <<  Nsources 								<< endl
+    	 << "       Shared Memory per SM : " <<  SMem_Per_SM 							<< endl
+    	 << "    Shared Memory per block : " <<  SMem_Per_Block(BLOCK_SIZE) 			<< endl
+    	 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< endl
+    	 << "                  F1_OFFSET : " <<  F1_OFFSET 								<< endl
+    	 << "               F1 dimension : " <<  SMem_Per_Block(BLOCK_SIZE)-F1_OFFSET	<< endl
+    	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< endl
+    	 << "       Block frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< endl
+		 << "-------------------------------------------------------" 			<< endl << endl;
 
  	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
@@ -75,8 +87,11 @@ int main(int argc, char *argv[]){
  	for (int test = 0; test < N_TEST; test++)
 	{
 
+		//680093
+		//2925085
 		int source = rand() % N;
 		int target = rand() % N;
+		printf("#%d:\tsource: %d    \ttarget: %d\n", test,source, target);
 
 		// choose Nsources distinguished nodes with source and target in it and return a vector of them	
 	    ChooseNodes(sources, vertex, N, Nsources, source, target);
@@ -96,6 +111,7 @@ int main(int argc, char *argv[]){
 			Distance[j].y = i;
 			// Distance[j] = 0;
 			// Color[j] = i;
+			//printf("sources[%d] = %d\n",i,j );
 		}
 		Distance[0].x = 0;
 		
@@ -123,9 +139,14 @@ int main(int argc, char *argv[]){
 
 	    // Launch Cuda Kernel
 		dim3 block(BLOCK_SIZE, 1);
-	    dim3 grid(1, 1);
-	    
-	    BFS_BlockKernel<<< grid, block, SM_BYTE_PER_BLOCK>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
+		if(SINGLE_BLOCK){
+		    dim3 grid(1, 1);
+		    BFS_BlockKernel<<< grid, block, SMem_Per_SM>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
+		}
+		else{
+		    dim3 grid(Nsources, 1);
+		    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
+		}
 
 		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
 		// for (int i = 0; i < Nsources; ++i)
@@ -154,7 +175,7 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
 	    //if(!DEBUG){
-			printf("#%d:\tst-Connectivity from %d\t   to %d\tis %c[%d;%dm%s%c[%dm\t\tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+			printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
 			//printf("Parallel Time : %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
@@ -164,16 +185,19 @@ int main(int argc, char *argv[]){
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;
 	}
-	double sum_par = 0;
-	double sum_seq = 0;
-	for (int i = 1; i < N_TEST; ++i){
-		sum_par += par_times[i];
-		sum_seq += seq_times[i];
+	if(N_TEST > 1)
+	{
+		double sum_par = 0;
+		double sum_seq = 0;
+		for (int i = 1; i < N_TEST; ++i){
+			sum_par += par_times[i];
+			sum_seq += seq_times[i];
+		}
+		printf("\nN: %d\n", Nsources);
+		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
+		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
+		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
 	}
-	printf("\nN: %d\n", Nsources);
-	printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
-	printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
-	printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
 
 	//free memory
 	cudaFree(Dvertex);
