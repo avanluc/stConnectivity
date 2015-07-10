@@ -4,7 +4,7 @@
 #include "GlobalSync.cu"
 #include <assert.h>
 
-//__device__ int GlobalCounter = 0;
+__device__ int GlobalCounter = 0;
 __device__ int globalMax = 0;
 
 extern __shared__ unsigned char SMem[];
@@ -35,7 +35,7 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
 
 
 
-__device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int founds, int& n, int &totalBlock, int& globalOffset) {
+__device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int founds, int& n, int &totalBlock, int& globalOffset) {
 	int* SM = (int*) &SMem[TEMP_POS];
 	n = founds;
 	const int warpId = WarpID();
@@ -48,7 +48,7 @@ __device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int fo
 
 		if (Tid == 0) {
 			SM[32] = total;
-			SM[33] = atomicAdd(GlobalCounter, total);
+			SM[33] = atomicAdd(Front_size, total);
 		}
 		SM[Tid] = sum;
 	}
@@ -61,43 +61,16 @@ __device__ __forceinline__ void FrontierReserve_Block(int* GlobalCounter, int fo
 
 
 
-__device__ __forceinline__ void Write(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
+__device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int founds) {
 		
 		int n, total, globalOffset;
-		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
+		FrontierReserve_Block(Front_size, founds, n, total, globalOffset);
 
 		const int pos = globalOffset + n;
 		for (int i = 0; i < founds; i++){
 			cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
 			if((pos + i) < BLOCK_FRONTIER_LIMIT)
 				devFrontier[pos + i] = Queue[i];
-		}
-}
-
-__device__ __forceinline__ void Write1(int* devFrontier, int* GlobalCounter, int* Queue, int founds) {
-		
-		int n, total, globalOffset;
-		FrontierReserve_Block(GlobalCounter, founds, n, total, globalOffset);
-		int* SM = (int*) SMem;
-		int j = 0;
-		while (total > 0) 
-		{
-			__syncthreads();
-			while (j < founds && n + j < IntSMem_Per_Block(BLOCK_SIZE) ) {
-				SM[n + j] = Queue[j];
-				j++;
-			}
-			__syncthreads();
-
-			#pragma unroll
-			for (int i = 0; i < IntSMem_Per_Thread; ++i) {
-				const int index = Tid + i * BLOCK_SIZE;
-				if (index < total)
-					devFrontier[globalOffset + index] = SM[index];
-			}
-			n -= IntSMem_Per_Block(BLOCK_SIZE);
-			total -= IntSMem_Per_Block(BLOCK_SIZE);
-			globalOffset += IntSMem_Per_Block(BLOCK_SIZE);
 		}
 }
 
@@ -138,16 +111,17 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 			const int index = SMemF1[t];
 			const int start = devNode[index];
 			const int2 current = devDistance[index];
-			int end = devNode[index + 1];
+			int end = devNode[index + 1];	
 
 			for (int k = start; k < end; k++) {
 				const int dest = devEdge[k];
-				const int2 destination = devDistance[dest];			
+				const int2 destination = devDistance[dest];	
 
 				/* add dest to the queue */
 				if(ATOMIC)
-				{
-					if (atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX) {	
+				{	
+					int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
+					if ( old == INT_MAX) {	
 						devDistance[dest].x = level;
 						devDistance[dest].y = current.y;
 						Queue[founds++] = dest;
@@ -180,15 +154,14 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		level++;
 
 		FrontierSize = F2SizePtr[0];
+		//if(Tid == 0)
+		//	atomicAdd(&GlobalCounter, FrontierSize);
 
 		__syncthreads();
 		F2SizePtr[0] = 0;
-		if(Tid == 0 && FrontierSize > globalMax)
-			atomicCAS(&globalMax, globalMax, FrontierSize);
+		//if(Tid == 0 && FrontierSize > globalMax);
+			//atomicCAS(&globalMax, globalMax, FrontierSize);
 	}
-	//if(Tid == 0)
-		//printf("%d,%d:Max FrontierSize = %d\n",blockIdx.x, Tid, globalMax );
-		//printf("%d,%d: FrontierSize = %d\n", level, blockIdx.x, FrontierSize );
 }
 
 

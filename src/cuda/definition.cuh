@@ -2,9 +2,9 @@
 
 /* DEBUG CONFIG */
 #define				   DEBUG	1
-#define				   ATOMIC	1
+#define				   ATOMIC	0
 #define			SINGLE_BLOCK	0
-#define				  N_TEST 	1000
+#define				  N_TEST 	200
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
@@ -36,7 +36,7 @@ const int REG_QUEUE  = 	32;
 #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / 4)
 
 #define cudaAssert(condition, pos) \
-  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n ", #condition, pos); asm("trap;"); }
+  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
 
 // #define				TEMP_POS 	0
 // #define			END_TEMP_POS 	(TEMP_POS + (34 * 4))
@@ -63,3 +63,4 @@ const int REG_QUEUE  = 	32;
 #define     F1_BLOCK_POS	(END_TEMP_POS)
 #define     F2_BLOCK_POS	(F1_BLOCK_POS + FRONTIER_SIZE)
 */
+

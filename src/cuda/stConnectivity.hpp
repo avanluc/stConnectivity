@@ -82,13 +82,38 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 }
 
 
+
+vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
+	vector< ONodes > OrderedNodes(nof_nodes);
+	for (int i = 0; i < nof_nodes; ++i)
+	{
+		OrderedNodes[i].id = i;
+		OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
+	}
+	sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
+	return OrderedNodes;
+}
+
+
+
+void ChooseNodes(int* sources, vector< ONodes > OrderedNodes, const int nof_distNodes, const int source, const int target) {
+
+	sources[0] = source;
+	
+	if(nof_distNodes > 1)		
+		sources[1] = target;
+	if(nof_distNodes > 2)
+		for (int i = 2; i < nof_distNodes; i++)
+			sources[i] = OrderedNodes[i].id;
+	return;
+}
+
+
+
 /*
 * Function that choose nof_distNodes nodes of the graph
 */
-void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
-
-	//vector< int > distNodes(nof_distNodes);			// vector of distinguished nodes
-	//vector< ONodes > OrderedNodes(nof_nodes);		// vector of nodes ordered by degree
+void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
 
 	sources[0] = source;
 	
@@ -96,17 +121,6 @@ void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int 
 		sources[1] = target;
 
 	if(nof_distNodes > 2)
-	{
-		/*for (int i = 0; i < nof_nodes; ++i)
-		{
-			OrderedNodes[i].id = i;
-			if(i == source || i == target)
-				OrderedNodes[i].degree = -1;	
-			else
-				OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
-		}
-		sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);*/
-		//srand (time(NULL));
 		for (int i = 2; i < nof_distNodes; i++){
 			bool isGood = 1;
 			sources[i] = rand() % N;
@@ -119,7 +133,7 @@ void ChooseNodes(int* sources, const int* Nodes, const int nof_nodes, const int 
 			if (!isGood)
 				i--;
 		}
-	}
+
 	return;
 }
 
@@ -170,4 +184,20 @@ void ReadGraph(char *file, edge *graph){
 		qsort(graph, (E), sizeof(edge), compare);
 	}
 	return;
+}
+
+double min(vector<long double> data, int n){
+	double min  = 100;
+	for(int i = 0; i < n; i++){
+		min  = (data[i] < min ? data[i] : min);
+	}
+	return min;
+}
+
+double max(vector<long double> data, int n){
+	double max  = 0;
+	for(int i = 0; i < n; i++){
+		max  = (data[i] > max ? data[i] : max);
+	}
+	return max;
 }

@@ -64,6 +64,7 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
 	//gpuErrchk( cudaMalloc((void **) &Dcolor, 	sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeN3) );
+/*
 	printf("Device memory allocated\n");
 
 	cout << "\n---------------------KERNEL INFO---------------------" 					<< endl
@@ -78,23 +79,27 @@ int main(int argc, char *argv[]){
     	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< endl
     	 << "       Block frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< endl
 		 << "-------------------------------------------------------" 			<< endl << endl;
+*/
+ 	//vector< ONodes > ordered = OrderNodes(vertex, N);
 
  	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
  	vector<double> seq_times(N_TEST);
+ 	vector<long double> Percentual(N_TEST);
+ 	int percCounter = 0;
+
 
 	srand (time(NULL));
  	for (int test = 0; test < N_TEST; test++)
 	{
 
-		//680093
-		//2925085
 		int source = rand() % N;
 		int target = rand() % N;
-		printf("#%d:\tsource: %d    \ttarget: %d\n", test,source, target);
+		//printf("#%d:\tsource: %d    \ttarget: %d\n", test,source, target);
 
 		// choose Nsources distinguished nodes with source and target in it and return a vector of them	
-	    ChooseNodes(sources, vertex, N, Nsources, source, target);
+	    //ChooseNodes(sources, ordered, Nsources, source, target);
+	    ChooseRandomNodes(sources, vertex, N, Nsources, source, target);
 
 	    // inizializzazione dei valori a INT_MAX
 	    for (int i = 0; i < N; i++){
@@ -113,8 +118,8 @@ int main(int argc, char *argv[]){
 			// Color[j] = i;
 			//printf("sources[%d] = %d\n",i,j );
 		}
-		Distance[0].x = 0;
 		
+		int VisitedNodes = 0;
 	    // Copy host memory for vertex, edges and results vectors to device
 	    gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN1, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
@@ -122,6 +127,8 @@ int main(int argc, char *argv[]){
 	    //gpuErrchk( cudaMemcpy(Dcolor, Color, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );
+		
+		gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
 	    
 		// Allocate CUDA events to be used for timing
 	    cudaEvent_t start;
@@ -139,14 +146,36 @@ int main(int argc, char *argv[]){
 
 	    // Launch Cuda Kernel
 		dim3 block(BLOCK_SIZE, 1);
-		if(SINGLE_BLOCK){
-		    dim3 grid(1, 1);
-		    BFS_BlockKernel<<< grid, block, SMem_Per_SM>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
-		}
-		else{
+
+		// if(SINGLE_BLOCK){
+		//     dim3 grid(1, 1);
+		//     BFS_BlockKernel<<< grid, block, SMem_Per_SM>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
+		// }
+		// else{
 		    dim3 grid(Nsources, 1);
 		    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
-		}
+		// }
+
+		// gpuErrchk( cudaMemcpyFromSymbol(&VisitedNodes, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		// VisitedNodes += Nsources;
+		// long double perc = ((long double)VisitedNodes / (long double)N) * 100;
+		// //cout << "              Visited Nodes : " << VisitedNodes << endl 
+		// //	 << "                Graph Nodes : "<< N << endl;
+		// //printf("  Graph Visitage Percentual : %.2Lf%\n", perc);
+		// if(VisitedNodes < N){
+		// 	printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t\t\t%.2Lf%\n", perc);
+		// 	Percentual[percCounter] = perc;
+		// 	percCounter++;
+		// }
+		// else{
+		// 	printf("-------------------------------------------------------\n");
+		// }
+
+		/*gpuErrchk( cudaMemcpy(Distance, Ddistance, sizeN, cudaMemcpyDeviceToHost) );
+		for (int i = 0; i < N; i++){
+	    	if (Distance[i].x == INT_MAX)
+	    		printf("---WARNING--- Nodo %d non visitato!!\n", i);
+	    }*/
 
 		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
 		// for (int i = 0; i < Nsources; ++i)
@@ -163,7 +192,7 @@ int main(int argc, char *argv[]){
 		gpuErrchk( cudaEventRecord(start1, NULL) );
 	    
 	    bool connect = false;
-	    connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
+		connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
 
 		gpuErrchk( cudaEventRecord(stop1, NULL) );
 	    gpuErrchk( cudaEventSynchronize(stop1) );
@@ -175,9 +204,9 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
 	    //if(!DEBUG){
-			printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
-															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
-															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			// printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+			// 												test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+			// 												27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
 			//printf("Parallel Time : %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
 
 			//printf("-----------------------------------\n");	
@@ -198,6 +227,15 @@ int main(int argc, char *argv[]){
 		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
 		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
 	}
+
+	// double sum = 0;
+	// for(int i = 0; i < percCounter; i++){
+	// 	sum += Percentual[i];
+	// 	printf("sum = %f", sum);
+	// }
+	// printf("\n\nAVG Percentual \t\t: %.2f%\n", sum / percCounter);
+	// printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percCounter));
+	// printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percCounter));
 
 	//free memory
 	cudaFree(Dvertex);
