@@ -1,13 +1,30 @@
 #pragma once
 
+#include <assert.h>
 #include "prefixSumAsm.cu"
 #include "GlobalSync.cu"
-#include <assert.h>
+#include "definition.cuh"
 
 __device__ int GlobalCounter = 0;
 __device__ int globalMax = 0;
 
 extern __shared__ unsigned char SMem[];
+
+
+ /*
+* Assert for CUDA functions
+*/
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
+
 
 /*
 * Self made atomic function to store a int2 value 
@@ -132,6 +149,14 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 						Matrix[ (destination.y * Nsources) + current.y ] = true;	
 					}
 				}
+				else if(BFS)
+				{
+					if (destination.x == INT_MAX) {	
+						devDistance[dest].x = level;
+						devDistance[dest].y = current.y;
+						Queue[founds++] = dest;
+					}
+				}
 				else
 				{
 					if (destination.x == INT_MAX) {	
@@ -147,7 +172,7 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 			}
 		}
 		
-		int WarpPos, n, total;
+		//int WarpPos, n, total;
 		Write(SMemF1, &F2SizePtr[0], Queue, founds);
 
 		//swapDev(SMemF1, SMemF2);

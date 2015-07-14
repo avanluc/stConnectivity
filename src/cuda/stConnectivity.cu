@@ -1,4 +1,7 @@
-#include <KernelStConnectivity_WEfficient.cuh>
+#pragma once
+
+#include "KernelStConnectivity_WEfficient.cu"
+#include "stConn.h"
 
 using namespace std;
 
@@ -12,57 +15,67 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	// Read graph from file
+
+	/***    READ GRAPH FROM FILE    ***/
+	int N, E, nof_lines;
+ 	GDirection GraphDirection;  // scelta dell'utente oppure vuote (direzione di default estratta dal file) valori possibili = DIRECTED, UNDIRECTED
+ 	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
+    Graph graph(N, E, GraphDirection);
+    readGraph::readSTD(argv[1], graph, nof_lines);
+
+
+
+	/***    READ GRAPH FROM FILE    ***/
+	/*int N, E;
 	edge *graph;
 	ifstream in (argv[1]);
 	in >> N >> E;
 	graph = (edge*)malloc(E*sizeof(edge));
-	ReadGraph(argv[1], graph);
+	ReadGraph(argv[1], graph, &N, &E);
 	
 	// Memory allocation and initialization
 	int *vertex = (int*)calloc(N+1, sizeof(int));
 	int *edges = (int*)calloc(E, sizeof(int));
 	
 	// Creation of CSR structure
-	GraphToCSR(graph, vertex, edges);
+	GraphToCSR(graph, vertex, edges, N, E);
+
 	printf("Transfert graph to CSR structure\n");
-	
+	*/
 	// int source = atoi(argv[2]);
 	// int target = atoi(argv[3]);
 	// int Nsources = atoi(argv[4]);
 
-	int Nsources = atoi(argv[2]);
 
 	// calculate size for allocation
-	size_t sizeE 	= E * sizeof(int);
-	//size_t sizeN 	= N * sizeof(int);
-	size_t sizeN 	= N * sizeof(int2);
-	size_t sizeN1 	= (N+1) * sizeof(int);
-	size_t sizeN3 	= Nsources * sizeof(int);
+	int Nsources = atoi(argv[2]);
+
+	size_t sizeE 	  = E * sizeof(int);
+	size_t sizeN 	  = N * sizeof(int2);
+	size_t sizeN1 	  = (N+1) * sizeof(int);
+	size_t sizeN3 	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
 
-	// Allocate adj matrix in row major
-	// int *Color 		= (int*)calloc(N, sizeof(int));
-	// int *Distance 	= (int*)calloc(N, sizeof(int));	
+	
+
+	/***    ALLOCATE HOST MEMORY    ***/
 	int2 *Distance 	= (int2*)calloc(N, sizeof(int2));	
 	int *sources 	= (int*)calloc(Nsources, sizeof(int));
 	int *Queue 		= (int*)calloc(Nsources, sizeof(int));	
 	bool *matrix 	= (bool*)calloc(Nsources * Nsources, sizeof(bool));
 
-	// Allocate device memory
+
+	/***    ALLOCATE DEVICE MEMORY    ***/
 	int *Dedges;
 	int *Dvertex;
 	int *Dsources;
 	int2 *Ddistance;
-	// int *Ddistance;
-	// int *Dcolor;
 	bool *DMatrix;
 
 	gpuErrchk( cudaMalloc((void **) &Dvertex, 	sizeN1) );
 	gpuErrchk( cudaMalloc((void **) &Dedges, 	sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
-	//gpuErrchk( cudaMalloc((void **) &Dcolor, 	sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeN3) );
 /*
 	printf("Device memory allocated\n");
@@ -82,6 +95,7 @@ int main(int argc, char *argv[]){
 */
  	//vector< ONodes > ordered = OrderNodes(vertex, N);
 
+	/***    SERVICE VARIABLES    ***/
  	vector<double> mean_times(3);
  	vector<double> par_times(N_TEST);
  	vector<double> seq_times(N_TEST);
@@ -95,18 +109,13 @@ int main(int argc, char *argv[]){
 
 		int source = rand() % N;
 		int target = rand() % N;
-		//printf("#%d:\tsource: %d    \ttarget: %d\n", test,source, target);
 
-		// choose Nsources distinguished nodes with source and target in it and return a vector of them	
-	    //ChooseNodes(sources, ordered, Nsources, source, target);
-	    ChooseRandomNodes(sources, vertex, N, Nsources, source, target);
+	    ChooseRandomNodes(sources, graph.OutNodes, N, Nsources, source, target);
 
 	    // inizializzazione dei valori a INT_MAX
 	    for (int i = 0; i < N; i++){
 	    	Distance[i].x = INT_MAX;
 	    	Distance[i].y = INT_MAX;
-	  		// Distance[i] = INT_MAX;
-			// Color[i] = INT_MAX;
 	    }
 
 	    // inizializzazione dei valori dei nodi distinti a Distance 0 e Color id
@@ -114,21 +123,19 @@ int main(int argc, char *argv[]){
 			int j = sources[i];
 			Distance[j].x = 0;
 			Distance[j].y = i;
-			// Distance[j] = 0;
-			// Color[j] = i;
-			//printf("sources[%d] = %d\n",i,j );
 		}
 		
 		int VisitedNodes = 0;
-	    // Copy host memory for vertex, edges and results vectors to device
-	    gpuErrchk( cudaMemcpy(Dvertex, vertex, sizeN1, cudaMemcpyHostToDevice) );
+	    
+	    /***    MEMCOPY HOST_TO_DEVICE    ***/
+	    gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
+	    gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Dedges, edges, sizeE, cudaMemcpyHostToDevice) );
-	    //gpuErrchk( cudaMemcpy(Dcolor, Color, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );
 		
-		gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
+		if(ATOMIC)
+			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
 	    
 		// Allocate CUDA events to be used for timing
 	    cudaEvent_t start;
@@ -137,9 +144,7 @@ int main(int argc, char *argv[]){
 	    cudaEvent_t stop1;
 
 	    gpuErrchk( cudaEventCreate(&start) );
-	    gpuErrchk( cudaEventCreate(&start1) );
 	    gpuErrchk( cudaEventCreate(&stop) );
-	    gpuErrchk( cudaEventCreate(&stop1) );
 	    
 	    // Record the start event
 	    gpuErrchk( cudaEventRecord(start, NULL) );
@@ -147,6 +152,8 @@ int main(int argc, char *argv[]){
 	    // Launch Cuda Kernel
 		dim3 block(BLOCK_SIZE, 1);
 
+
+		/***    LAUNCH KERNEL    ***/
 		// if(SINGLE_BLOCK){
 		//     dim3 grid(1, 1);
 		//     BFS_BlockKernel<<< grid, block, SMem_Per_SM>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
@@ -177,7 +184,11 @@ int main(int argc, char *argv[]){
 	    		printf("---WARNING--- Nodo %d non visitato!!\n", i);
 	    }*/
 
-		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+	    /***    MEMCOPY DEVICE_TO_HOST    ***/
+	    if(!BFS)
+			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+		
+
 		// for (int i = 0; i < Nsources; ++i)
 		// {
 		// 	printf("| ");
@@ -189,28 +200,32 @@ int main(int argc, char *argv[]){
 		
 	    gpuErrchk( cudaEventRecord(stop, NULL) );
 	    gpuErrchk( cudaEventSynchronize(stop) );
-		gpuErrchk( cudaEventRecord(start1, NULL) );
-	    
-	    bool connect = false;
-		connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
-
-		gpuErrchk( cudaEventRecord(stop1, NULL) );
-	    gpuErrchk( cudaEventSynchronize(stop1) );
-
-	    // Claculate elapsed time
 	    float msecTotal = 0.0f;
 	    float msecTotal1 = 0.0f;
+	    bool connect = false;
+
+
+	    /***    MATRIX VISIT ON HOST    ***/
+	    if(!BFS){
+		    Timer<HOST> TM;
+		    TM.start();
+		    
+			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
+
+			TM.stop();
+	    	
+		    msecTotal1 = TM.duration();
+	    }
+
+
+		/***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
-	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 
-	    //if(!DEBUG){
-			// printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
-			// 												test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
-			// 												27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
-			//printf("Parallel Time : %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, msecTotal, 27, 0);
-
-			//printf("-----------------------------------\n");	
-	    //}
+	    if(DEBUG){
+			printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+	    }
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;
 	}
@@ -237,20 +252,19 @@ int main(int argc, char *argv[]){
 	// printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percCounter));
 	// printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percCounter));
 
-	//free memory
+	
+	/***    FREE MEMORY    ***/
 	cudaFree(Dvertex);
     cudaFree(Dedges);
     cudaFree(DMatrix);
-    //cudaFree(Dcolor);
     cudaFree(Ddistance);
 
     free(Queue);
 	free(matrix);
-	//free(Color);
 	free(Distance);
-	free(vertex);
-	free(edges);
-	free(graph);
+	//free(vertex);
+	//free(edges);
+	//free(graph);
 
 	return 0;
 }

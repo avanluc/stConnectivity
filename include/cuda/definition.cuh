@@ -1,6 +1,7 @@
 #pragma once
 
 /* DEBUG CONFIG */
+#define				     BFS	0
 #define				   DEBUG	1
 #define				   ATOMIC	0
 #define			SINGLE_BLOCK	0
@@ -8,7 +9,7 @@
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
-#define			  BLOCK_SIZE	512
+#define			  BLOCK_SIZE	128
 #define		   Thread_Per_SM	2048
 #define				N_OF_SMs	12
 #define	   	  	 SMem_Per_SM	49152
@@ -37,6 +38,7 @@ const int REG_QUEUE  = 	32;
 
 #define cudaAssert(condition, pos) \
   if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
+
 
 // #define				TEMP_POS 	0
 // #define			END_TEMP_POS 	(TEMP_POS + (34 * 4))

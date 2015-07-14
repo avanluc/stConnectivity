@@ -1,42 +1,8 @@
-#include <iostream>
-#include <fstream>
-#include <algorithm>
-#include <climits>
-#include <stdlib.h>
-#include <vector>
-#include <iomanip>
-#include "definition.cuh"
+#pragma once
+
+#include "stConn.h"
 
 using namespace std;
-
-// Graph parameters (#nodes, #edges)
-int  N, E;
-
-// Edge structure
-struct edge{
-	int x;
-	int y;
-};
-
-// Stuct for ordered nodes
-struct ONodes{
-	int id;
-	int degree;
-};
-
-
-/*
-* Assert for CUDA functions
-*/
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) 
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
-}
 
 /*
 * Compare function for sorting
@@ -123,7 +89,7 @@ void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, cons
 	if(nof_distNodes > 2)
 		for (int i = 2; i < nof_distNodes; i++){
 			bool isGood = 1;
-			sources[i] = rand() % N;
+			sources[i] = rand() % nof_nodes;
 			for(int j = 0; j < i; j++){
 				if(sources[j] == sources[i]){
 					isGood = 0;
@@ -138,7 +104,7 @@ void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, cons
 }
 
 
-void GraphToCSR(const edge* graph, int* vertex, int* edges){
+void GraphToCSR(const edge* graph, int* vertex, int* edges, int N, int E){
 	int j = 0;  // Current adjacency list length
 
 	// for each arc i in the graph
@@ -168,20 +134,20 @@ void GraphToCSR(const edge* graph, int* vertex, int* edges){
 }
 
 
-void ReadGraph(char *file, edge *graph){
+void ReadGraph(char *file, edge *graph, int *N, int *E){
 	int x,y;
 	ifstream in (file);
 	if(in.is_open()){
-		in >> N >> E;
-		for(int i = 0; i < E; i++){	
+		in >> *N >> *E;
+		for(int i = 0; i < *E; i++){	
 			in >> x >> y;
 			graph[i].x = x;
 			graph[i].y = y;
-			if(x >= N || y >= N)
+			if(x >= *N || y >= *N)
 				printf("Error at row %d: node id > # nodes\n", i+2);
 		}
 		// Sorting graph using specified compare function
-		qsort(graph, (E), sizeof(edge), compare);
+		qsort(graph, (*E), sizeof(edge), compare);
 	}
 	return;
 }

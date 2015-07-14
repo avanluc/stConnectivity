@@ -1,6 +1,7 @@
 #pragma once
 
-#include <../../cub/cub.cuh>
+#include <cub.cuh>
+#include "definition.cuh"
 
 __device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
 __device__ bool devNextLevel[4];

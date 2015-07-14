@@ -1,6 +1,6 @@
 #pragma once
-#include <stConnectivity.hpp>
-#include <../../cub/cub.cuh>
+#include <cub.cuh>
+#include "definition.cuh"
 // ----------- THREAD PTX -------------------
 
 __device__ __forceinline__ int LaneID() {
