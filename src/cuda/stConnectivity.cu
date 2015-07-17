@@ -6,49 +6,11 @@
 using namespace std;
 
 
-int main(int argc, char *argv[]){
 
-	// If wrong number of argumants print usage
-	if(argc < 3)
-	{
-		printf("\nUsage: ./stConnectivity 'input_file' '#_distinguished_nodes'\n\n");
-		return -1;
-	}
-
-
-	/***    READ GRAPH FROM FILE    ***/
-	int N, E, nof_lines;
- 	GDirection GraphDirection;  // scelta dell'utente oppure vuote (direzione di default estratta dal file) valori possibili = DIRECTED, UNDIRECTED
- 	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
-    Graph graph(N, E, GraphDirection);
-    readGraph::readSTD(argv[1], graph, nof_lines);
-
-
-
-	/***    READ GRAPH FROM FILE    ***/
-	/*int N, E;
-	edge *graph;
-	ifstream in (argv[1]);
-	in >> N >> E;
-	graph = (edge*)malloc(E*sizeof(edge));
-	ReadGraph(argv[1], graph, &N, &E);
+void doSTCONN(Graph graph, int N, int E, int Nsources){
 	
-	// Memory allocation and initialization
-	int *vertex = (int*)calloc(N+1, sizeof(int));
-	int *edges = (int*)calloc(E, sizeof(int));
-	
-	// Creation of CSR structure
-	GraphToCSR(graph, vertex, edges, N, E);
-
-	printf("Transfert graph to CSR structure\n");
-	*/
-	// int source = atoi(argv[2]);
-	// int target = atoi(argv[3]);
-	// int Nsources = atoi(argv[4]);
-
-
-	// calculate size for allocation
-	int Nsources = atoi(argv[2]);
+	/***    CALCULATE SIZES    ***/
+	//int Nsources = atoi(argv[2]);
 
 	size_t sizeE 	  = E * sizeof(int);
 	size_t sizeN 	  = N * sizeof(int2);
@@ -77,9 +39,9 @@ int main(int argc, char *argv[]){
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeN3) );
-/*
-	printf("Device memory allocated\n");
 
+	/***    PRINT CONFIG INFO    ***/
+/*
 	cout << "\n---------------------KERNEL INFO---------------------" 					<< endl
     	 << "            Block dimension : " <<  BLOCK_SIZE 							<< endl
     	 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< endl
@@ -93,6 +55,7 @@ int main(int argc, char *argv[]){
     	 << "       Block frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< endl
 		 << "-------------------------------------------------------" 			<< endl << endl;
 */
+
  	//vector< ONodes > ordered = OrderNodes(vertex, N);
 
 	/***    SERVICE VARIABLES    ***/
@@ -101,24 +64,27 @@ int main(int argc, char *argv[]){
  	vector<double> seq_times(N_TEST);
  	vector<long double> Percentual(N_TEST);
  	int percCounter = 0;
+ 	int NULLCounter = 0;
+ 	long double perc = 0.0;
 
 
 	srand (time(NULL));
  	for (int test = 0; test < N_TEST; test++)
 	{
 
+		/***    CHOOSE RANDOM SOURCE, DEST AND EXTRA-SOURCES    ***/
 		int source = rand() % N;
 		int target = rand() % N;
 
 	    ChooseRandomNodes(sources, graph.OutNodes, N, Nsources, source, target);
 
-	    // inizializzazione dei valori a INT_MAX
+
+	    /***    STRUCTURES INITIALIZATION    ***/
 	    for (int i = 0; i < N; i++){
 	    	Distance[i].x = INT_MAX;
 	    	Distance[i].y = INT_MAX;
 	    }
 
-	    // inizializzazione dei valori dei nodi distinti a Distance 0 e Color id
 	    for (int i = 0; i < Nsources; i++){
 			int j = sources[i];
 			Distance[j].x = 0;
@@ -132,51 +98,58 @@ int main(int argc, char *argv[]){
 	    gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );
-		
+	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );		
 		if(ATOMIC)
 			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
 	    
-		// Allocate CUDA events to be used for timing
+		
+		/***    ALLOCATE CUDA EVENT FOR TIMING    ***/
 	    cudaEvent_t start;
-	    cudaEvent_t start1;
 	    cudaEvent_t stop;
-	    cudaEvent_t stop1;
 
 	    gpuErrchk( cudaEventCreate(&start) );
 	    gpuErrchk( cudaEventCreate(&stop) );
-	    
-	    // Record the start event
 	    gpuErrchk( cudaEventRecord(start, NULL) );
-
-	    // Launch Cuda Kernel
-		dim3 block(BLOCK_SIZE, 1);
 
 
 		/***    LAUNCH KERNEL    ***/
-		// if(SINGLE_BLOCK){
-		//     dim3 grid(1, 1);
-		//     BFS_BlockKernel<<< grid, block, SMem_Per_SM>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
-		// }
-		// else{
-		    dim3 grid(Nsources, 1);
-		    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
-		// }
+		dim3 block(BLOCK_SIZE, 1);
+	    dim3 grid(Nsources, 1);
+	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
 
-		// gpuErrchk( cudaMemcpyFromSymbol(&VisitedNodes, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-		// VisitedNodes += Nsources;
-		// long double perc = ((long double)VisitedNodes / (long double)N) * 100;
-		// //cout << "              Visited Nodes : " << VisitedNodes << endl 
-		// //	 << "                Graph Nodes : "<< N << endl;
-		// //printf("  Graph Visitage Percentual : %.2Lf%\n", perc);
-		// if(VisitedNodes < N){
-		// 	printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t\t\t%.2Lf%\n", perc);
-		// 	Percentual[percCounter] = perc;
-		// 	percCounter++;
-		// }
-		// else{
-		// 	printf("-------------------------------------------------------\n");
-		// }
+
+	    /***    MEMCOPY DEVICE_TO_HOST    ***/
+	    if(!BFS)
+			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+
+
+	    /***    RECORD STOP TIME    ***/
+	    gpuErrchk( cudaEventRecord(stop, NULL) );
+	    gpuErrchk( cudaEventSynchronize(stop) );
+
+
+	    /***    COPY EXITFLAG FROM DEVICE    ***/
+	    if(!ATOMIC){
+		    int Flag = 0;
+		    gpuErrchk( cudaMemcpyFromSymbol(&Flag, exitFlag, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		    if(Flag){
+		    	NULLCounter = N_TEST - test;
+		    	break;
+		    }
+	    }
+
+
+	    /***    CHECK VISIT PERCENTAGE IF IT FAILS    ***/
+	    if(ATOMIC){
+			gpuErrchk( cudaMemcpyFromSymbol(&VisitedNodes, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			VisitedNodes += Nsources;
+			perc = ((long double)VisitedNodes / (long double)N) * 100;
+			if(VisitedNodes < N){
+				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t\t\t%.2Lf%\n", perc);
+				Percentual[percCounter] = perc;
+				percCounter++;
+			}
+		}
 
 		/*gpuErrchk( cudaMemcpy(Distance, Ddistance, sizeN, cudaMemcpyDeviceToHost) );
 		for (int i = 0; i < N; i++){
@@ -184,22 +157,18 @@ int main(int argc, char *argv[]){
 	    		printf("---WARNING--- Nodo %d non visitato!!\n", i);
 	    }*/
 
-	    /***    MEMCOPY DEVICE_TO_HOST    ***/
-	    if(!BFS)
-			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+
 		
 
-		// for (int i = 0; i < Nsources; ++i)
-		// {
+		/***    PRINT MATRIX    ***/
+		// for (int i = 0; i < Nsources; ++i){
 		// 	printf("| ");
 		// 	for (int j = 0; j < Nsources; ++j)
 		// 		printf("%d ", matrix[Nsources*i+j]);
 		// 	printf("|\n");
 		// }
-		//printf("matrix completed\n");
-		
-	    gpuErrchk( cudaEventRecord(stop, NULL) );
-	    gpuErrchk( cudaEventSynchronize(stop) );
+
+
 	    float msecTotal = 0.0f;
 	    float msecTotal1 = 0.0f;
 	    bool connect = false;
@@ -208,27 +177,33 @@ int main(int argc, char *argv[]){
 	    /***    MATRIX VISIT ON HOST    ***/
 	    if(!BFS){
 		    Timer<HOST> TM;
-		    TM.start();
-		    
+		    TM.start();		    
 			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
-
-			TM.stop();
-	    	
+			TM.stop();	    	
 		    msecTotal1 = TM.duration();
 	    }
 
 
 		/***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
-
-	    if(DEBUG){
+	    
+	    if(DEBUG)
 			printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+	    /*if( ATOMIC && perc < 100 ){
+			par_times[test] = 0;
+			seq_times[test] = 0;
+			NULLCounter++;
 	    }
-		par_times[test] = msecTotal;
-		seq_times[test] = msecTotal1;
+	    else{*/
+			par_times[test] = msecTotal;
+			seq_times[test] = msecTotal1;
+	   // }
 	}
+	
+
+	/***    EVALUATE MEAN TIMES    ***/
 	if(N_TEST > 1)
 	{
 		double sum_par = 0;
@@ -237,20 +212,25 @@ int main(int argc, char *argv[]){
 			sum_par += par_times[i];
 			sum_seq += seq_times[i];
 		}
-		printf("\nN: %d\n", Nsources);
-		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
-		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
-		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
+		//printf("\nN: %d\n", Nsources);
+		printf("# Completed task: %d on %d\n", N_TEST - NULLCounter, N_TEST);
+		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-NULLCounter), 27, 0);
+		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-NULLCounter), 27, 0);
+		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-NULLCounter), 27, 0);
 	}
 
-	// double sum = 0;
-	// for(int i = 0; i < percCounter; i++){
-	// 	sum += Percentual[i];
-	// 	printf("sum = %f", sum);
-	// }
-	// printf("\n\nAVG Percentual \t\t: %.2f%\n", sum / percCounter);
-	// printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percCounter));
-	// printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percCounter));
+
+	/***    EVALUATE MEAN PERCENTAGE    ***/
+	if(ATOMIC){
+		double sum = 0;
+		for(int i = 0; i < percCounter; i++){
+			sum += Percentual[i];
+			//printf("sum = %f", sum);
+		}
+		printf("\n\nAVG Percentual \t\t: %.2f%\n", sum / percCounter);
+		printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percCounter));
+		printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percCounter));
+	}
 
 	
 	/***    FREE MEMORY    ***/
@@ -265,6 +245,46 @@ int main(int argc, char *argv[]){
 	//free(vertex);
 	//free(edges);
 	//free(graph);
+}
+
+
+
+
+
+int main(int argc, char *argv[]){
+
+	if(argc < 2)
+	{
+		printf("\nUsage: ./stConnectivity 'input_file'\n\n");
+		return -1;
+	}
+
+
+	/***    READ GRAPH FROM FILE    ***/
+	int N, E, nof_lines;
+ 	GDirection GraphDirection;  	// scelta dell'utente oppure vuote (direzione di default estratta dal file) valori possibili = DIRECTED, UNDIRECTED
+ 	GraphDirection = UNDIRECTED;  			//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
+
+ 	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
+    Graph graph(N, E, GraphDirection);
+    readGraph::readSTD(argv[1], graph, nof_lines);
+
+    if(argc > 2)
+    {
+    	int Nsources = atoi(argv[2]);
+    	printf("Launch stConnectivity with %d sources\n", Nsources);
+		doSTCONN(graph, N, E, Nsources);
+    }
+    else
+    {
+		for (int i = 0; i < LENGTH; ++i)
+		{
+			printf("Launch stConnectivity with %d sources\n", parameters[i]);
+			doSTCONN(graph, N, E, parameters[i]);
+		}
+    }
+
+	
 
 	return 0;
 }

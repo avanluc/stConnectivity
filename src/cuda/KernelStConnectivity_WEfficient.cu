@@ -7,6 +7,7 @@
 
 __device__ int GlobalCounter = 0;
 __device__ int globalMax = 0;
+__device__ int exitFlag = 0;
 
 extern __shared__ unsigned char SMem[];
 
@@ -37,18 +38,6 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
     atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
     return;
 }
-
-
-
-/*__device__ __forceinline__ void FrontierReserve_Warp(int* GlobalCounter, int founds, int& n, int &totalWarp, int& globalOffset) {
-		n = founds;
-		totalWarp = warpExclusiveScan<32>(n);
-		int oldCounter;
-		if (LaneID() == 0)
-			oldCounter = atomicAdd(GlobalCounter, totalWarp);
-
-		globalOffset = __shfl(oldCounter, 0);
-}*/
 
 
 
@@ -85,9 +74,11 @@ __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Qu
 
 		const int pos = globalOffset + n;
 		for (int i = 0; i < founds; i++){
-			cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
 			if((pos + i) < BLOCK_FRONTIER_LIMIT)
 				devFrontier[pos + i] = Queue[i];
+			else if(!ATOMIC)
+				//cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
+				exitFlag = 1;
 		}
 }
 
@@ -111,6 +102,8 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 	int level = 0;
 	//int FrontierSize = Nsources;
 	int FrontierSize = 1;
+	if(!ATOMIC)
+		exitFlag = 0;
 
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	//int* SMemF2 = (int*) &SMem[F2_OFFSET];
@@ -122,6 +115,8 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 
 	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
 	{
+		if(!ATOMIC && exitFlag)
+			break;
 
 		int founds = 0;
 		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE){
@@ -179,8 +174,8 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 		level++;
 
 		FrontierSize = F2SizePtr[0];
-		//if(Tid == 0)
-		//	atomicAdd(&GlobalCounter, FrontierSize);
+		if(ATOMIC && Tid == 0)
+			atomicAdd(&GlobalCounter, FrontierSize);
 
 		__syncthreads();
 		F2SizePtr[0] = 0;
@@ -188,66 +183,3 @@ __global__ void BFS_BlockKernel (	const int* __restrict__	devNode,
 			//atomicCAS(&globalMax, globalMax, FrontierSize);
 	}
 }
-
-
-
-// __global__ void BFS_BlockKernel1 (	const int* __restrict__	devNode,
-// 									const int* __restrict__	devEdge,
-// 									const int* __restrict__	devSource,
-// 									int* __restrict__	devDistance,
-// 									int* __restrict__	devColor,
-// 									bool* __restrict__ Matrix,
-// 									const int Nsources) {
-// 	int Queue[REG_QUEUE];
-// 	int level = 0;
-// 	int FrontierSize = Nsources;
-
-// 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
-// 	int* SMemF2 = (int*) &SMem[F2_OFFSET];
-// 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
-
-// 	if (Tid < FrontierSize)
-// 		SMemF1[Tid] = devSource[Tid]; 
-
-// 	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT ) {
-
-// 		int founds = 0;
-// 		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE) {
-// 			const int index = SMemF1[t];
-// 			const int start = devNode[index];
-// 			const int currCol = devColor[index];
-// 			int end = devNode[index + 1];
-
-// 			for (int k = start; k < end; k++) {
-// 				const int dest = devEdge[k];
-// 				const int destCol = devColor[dest];			
-
-// 				/* add dest to the queue */
-// 				//int old = atomicCAS(&devDistance[dest], INT_MAX, level);
-// 				//if (old == INT_MAX) {	
-// 				if (devDistance[dest] == INT_MAX) {	
-// 					devDistance[dest] = level;
-// 					devColor[dest] = currCol;
-// 					Queue[founds++] = dest;
-// 				}
-// 				/* update adj matrix */
-// 				else if (destCol != currCol && destCol < Nsources){	
-// 					Matrix[ currCol*Nsources + destCol ] = true;	
-// 					Matrix[ destCol*Nsources + currCol ] = true;	
-// 				}
-// 			}
-// 		}
-		
-// 		int WarpPos, n, total;
-// 		Write(SMemF2, &F2SizePtr[0], Queue, founds);
-
-// 		swapDev(SMemF1, SMemF2);
-// 		level++;
-// 		//__syncthreads();
-
-// 		FrontierSize = F2SizePtr[0];
-
-// 		__syncthreads();
-// 		F2SizePtr[0] = 0;
-// 	}
-// }

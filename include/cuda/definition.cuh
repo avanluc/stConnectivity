@@ -3,13 +3,13 @@
 /* DEBUG CONFIG */
 #define				     BFS	0
 #define				   DEBUG	1
-#define				   ATOMIC	0
+#define				   ATOMIC	1
 #define			SINGLE_BLOCK	0
-#define				  N_TEST 	200
+#define				  N_TEST 	100
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
-#define			  BLOCK_SIZE	128
+#define			  BLOCK_SIZE	256
 #define		   Thread_Per_SM	2048
 #define				N_OF_SMs	12
 #define	   	  	 SMem_Per_SM	49152
@@ -37,7 +37,10 @@ const int REG_QUEUE  = 	32;
 #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / 4)
 
 #define cudaAssert(condition, pos) \
-  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
+  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); /*asm("trap;");*/ exitFlag = 1; }
+
+const int parameters[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000};
+const int LENGTH = sizeof(parameters) / sizeof(int);
 
 
 // #define				TEMP_POS 	0
