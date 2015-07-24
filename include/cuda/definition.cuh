@@ -9,6 +9,7 @@
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
+#define					 Bid 	blockIdx.x
 #define			  BLOCK_SIZE	256
 #define		   Thread_Per_SM	2048
 #define				N_OF_SMs	12
@@ -37,35 +38,7 @@ const int REG_QUEUE  = 	32;
 #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / 4)
 
 #define cudaAssert(condition, pos) \
-  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); /*asm("trap;");*/ exitFlag = 1; }
+  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); /*exitFlag = 1;*/ }
 
 const int parameters[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000};
 const int LENGTH = sizeof(parameters) / sizeof(int);
-
-
-// #define				TEMP_POS 	0
-// #define			END_TEMP_POS 	(TEMP_POS + (34 * 4))
-// #define       	  F2Size_POS	END_TEMP_POS
-// #define			   F1_OFFSET	(F2Size_POS + 8)
-// #define		   FRONTIER_SIZE 	((SMem_Per_SM - F1_OFFSET))
-// #define			   F2_OFFSET	(FRONTIER_SIZE + F1_OFFSET)
-// #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / 4)
-
-
-// #define	   SM_BYTE_PER_BLOCK	49152
-// #define       	  F2Size_POS	(SM_BYTE_PER_BLOCK - (sizeof(int) * 2))
-// #define	BLOCK_FRONTIER_LIMIT 	(F2Size_POS / (2 * sizeof(int)))
-// #define			   F1_OFFSET	0
-// #define			   F2_OFFSET	(F2Size_POS / 2)
-
-/*
-#define HASHTABLE_BLOCK_POS  0
-#define END_OF_HASHTABLE	(4096 * 8)	// 8: long long int size
-#define       F2Size_POS	END_OF_HASHTABLE
-#define         TEMP_POS	(F2Size_POS + 4)
-#define     END_TEMP_POS	(TEMP_POS + 32 * 4)
-#define    FRONTIER_SIZE	(((49152 - END_TEMP_POS) / 2) - 2)		//-2 align
-#define     F1_BLOCK_POS	(END_TEMP_POS)
-#define     F2_BLOCK_POS	(F1_BLOCK_POS + FRONTIER_SIZE)
-*/
-

@@ -1,21 +1,16 @@
 #pragma once
 
-#include "KernelStConnectivity_WEfficient.cu"
+#include "Kernel_StConnectivity.cu"
 #include "stConn.h"
-
-using namespace std;
-
 
 
 void doSTCONN(Graph graph, int N, int E, int Nsources){
 	
 	/***    CALCULATE SIZES    ***/
-	//int Nsources = atoi(argv[2]);
-
 	size_t sizeE 	  = E * sizeof(int);
 	size_t sizeN 	  = N * sizeof(int2);
 	size_t sizeN1 	  = (N+1) * sizeof(int);
-	size_t sizeN3 	  = Nsources * sizeof(int);
+	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
 
 	
@@ -38,33 +33,17 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	gpuErrchk( cudaMalloc((void **) &Dedges, 	sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
-	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeN3) );
+	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeSrcs) );
 
-	/***    PRINT CONFIG INFO    ***/
-/*
-	cout << "\n---------------------KERNEL INFO---------------------" 					<< endl
-    	 << "            Block dimension : " <<  BLOCK_SIZE 							<< endl
-    	 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< endl
-    	 << "   Number of current blocks : " <<  Nsources 								<< endl
-    	 << "       Shared Memory per SM : " <<  SMem_Per_SM 							<< endl
-    	 << "    Shared Memory per block : " <<  SMem_Per_Block(BLOCK_SIZE) 			<< endl
-    	 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< endl
-    	 << "                  F1_OFFSET : " <<  F1_OFFSET 								<< endl
-    	 << "               F1 dimension : " <<  SMem_Per_Block(BLOCK_SIZE)-F1_OFFSET	<< endl
-    	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< endl
-    	 << "       Block frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< endl
-		 << "-------------------------------------------------------" 			<< endl << endl;
-*/
-
- 	//vector< ONodes > ordered = OrderNodes(vertex, N);
 
 	/***    SERVICE VARIABLES    ***/
- 	vector<double> mean_times(3);
- 	vector<double> par_times(N_TEST);
- 	vector<double> seq_times(N_TEST);
- 	vector<long double> Percentual(N_TEST);
+ 	std::vector<double> mean_times(3);
+ 	std::vector<double> par_times(N_TEST);
+ 	std::vector<double> seq_times(N_TEST);
+ 	std::vector<long double> Percentual(N_TEST);
+ 	int connectCnt = 0;
  	int percCounter = 0;
- 	int NULLCounter = 0;
+ 	int unfinishedCnt = 0;
  	long double perc = 0.0;
 
 
@@ -98,7 +77,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeN3, cudaMemcpyHostToDevice) );		
+	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 		if(ATOMIC)
 			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
 	    
@@ -115,7 +94,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    LAUNCH KERNEL    ***/
 		dim3 block(BLOCK_SIZE, 1);
 	    dim3 grid(Nsources, 1);
-	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, /*Dcolor,*/ DMatrix, Nsources);
+	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
 
 
 	    /***    MEMCOPY DEVICE_TO_HOST    ***/
@@ -133,7 +112,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		    int Flag = 0;
 		    gpuErrchk( cudaMemcpyFromSymbol(&Flag, exitFlag, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		    if(Flag){
-		    	NULLCounter = N_TEST - test;
+		    	unfinishedCnt = N_TEST - test;
 		    	break;
 		    }
 	    }
@@ -150,23 +129,6 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 				percCounter++;
 			}
 		}
-
-		/*gpuErrchk( cudaMemcpy(Distance, Ddistance, sizeN, cudaMemcpyDeviceToHost) );
-		for (int i = 0; i < N; i++){
-	    	if (Distance[i].x == INT_MAX)
-	    		printf("---WARNING--- Nodo %d non visitato!!\n", i);
-	    }*/
-
-
-		
-
-		/***    PRINT MATRIX    ***/
-		// for (int i = 0; i < Nsources; ++i){
-		// 	printf("| ");
-		// 	for (int j = 0; j < Nsources; ++j)
-		// 		printf("%d ", matrix[Nsources*i+j]);
-		// 	printf("|\n");
-		// }
 
 
 	    float msecTotal = 0.0f;
@@ -188,71 +150,48 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
 	    
 	    if(DEBUG)
-			printf("#%d:\tsource: %d    \ttarget: %d   \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
-	    /*if( ATOMIC && perc < 100 ){
-			par_times[test] = 0;
-			seq_times[test] = 0;
-			NULLCounter++;
-	    }
-	    else{*/
-			par_times[test] = msecTotal;
-			seq_times[test] = msecTotal1;
-	   // }
+		par_times[test] = msecTotal;
+		seq_times[test] = msecTotal1;
+		
+		if( !connect )
+			connectCnt++;
+
+	    if( ATOMIC && perc < 100 )
+			unfinishedCnt++;
 	}
 	
 
 	/***    EVALUATE MEAN TIMES    ***/
 	if(N_TEST > 1)
-	{
-		double sum_par = 0;
-		double sum_seq = 0;
-		for (int i = 1; i < N_TEST; ++i){
-			sum_par += par_times[i];
-			sum_seq += seq_times[i];
-		}
-		//printf("\nN: %d\n", Nsources);
-		printf("# Completed task: %d on %d\n", N_TEST - NULLCounter, N_TEST);
-		printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-NULLCounter), 27, 0);
-		printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-NULLCounter), 27, 0);
-		printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-NULLCounter), 27, 0);
-	}
+		computeElapsedTime( par_times, seq_times, connectCnt);
 
 
 	/***    EVALUATE MEAN PERCENTAGE    ***/
-	if(ATOMIC){
-		double sum = 0;
-		for(int i = 0; i < percCounter; i++){
-			sum += Percentual[i];
-			//printf("sum = %f", sum);
-		}
-		printf("\n\nAVG Percentual \t\t: %.2f%\n", sum / percCounter);
-		printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percCounter));
-		printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percCounter));
-	}
+	if(ATOMIC)
+		computeMeanPercentage(Percentual, percCounter);
 
 	
-	/***    FREE MEMORY    ***/
-	cudaFree(Dvertex);
-    cudaFree(Dedges);
-    cudaFree(DMatrix);
+	/***    FREE DEVICE MEMORY    ***/
     cudaFree(Ddistance);
+	cudaFree(Dvertex);
+    cudaFree(DMatrix);
+    cudaFree(Dedges);
 
-    free(Queue);
-	free(matrix);
+	/***    FREE HOST MEMORY    ***/
 	free(Distance);
-	//free(vertex);
-	//free(edges);
-	//free(graph);
+	free(matrix);
+    free(Queue);
 }
-
 
 
 
 
 int main(int argc, char *argv[]){
 
+	/***    CONTROL PARAMETERS NUMBER    ***/
 	if(argc < 2)
 	{
 		printf("\nUsage: ./stConnectivity 'input_file'\n\n");
@@ -262,13 +201,26 @@ int main(int argc, char *argv[]){
 
 	/***    READ GRAPH FROM FILE    ***/
 	int N, E, nof_lines;
- 	GDirection GraphDirection;  	// scelta dell'utente oppure vuote (direzione di default estratta dal file) valori possibili = DIRECTED, UNDIRECTED
+ 	GDirection GraphDirection;
  	GraphDirection = UNDIRECTED;  			//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
-
  	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
     Graph graph(N, E, GraphDirection);
     readGraph::readSTD(argv[1], graph, nof_lines);
 
+
+    /***    PRINT CONFIG INFO    ***/
+	std::cout << "\n----------------------KERNEL INFO---------------------" 			<< std::endl
+    	 << "            Block dimension : " <<  BLOCK_SIZE 							<< std::endl
+    	 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< std::endl
+    	 << "       Shared Memory per SM : " <<  SMem_Per_SM 							<< std::endl
+    	 << "    Shared Memory per block : " <<  SMem_Per_Block(BLOCK_SIZE) 			<< std::endl
+    	 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< std::endl
+    	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< std::endl
+    	 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
+		 << "--------------------------------------------------------" 			<< std::endl << std::endl;
+
+
+	/***    LAUNCH ST-CONN FUNCTION    ***/
     if(argc > 2)
     {
     	int Nsources = atoi(argv[2]);
@@ -283,8 +235,6 @@ int main(int argc, char *argv[]){
 			doSTCONN(graph, N, E, parameters[i]);
 		}
     }
-
-	
 
 	return 0;
 }

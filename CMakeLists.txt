@@ -108,4 +108,4 @@ cuda_add_executable(stConnectivity ${PROJECT_SOURCE_DIR}/src/cuda/stConnectivity
 
 target_link_libraries(stConnectivity ${DEVRT_LIBRARY})
 
-set(EXECUTABLE_OUTPUT_PATH ./cuda)
+set(EXECUTABLE_OUTPUT_PATH ./)

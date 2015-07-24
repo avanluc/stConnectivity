@@ -2,7 +2,6 @@
 
 #include "stConn.h"
 
-using namespace std;
 
 /*
 * Compare function for sorting
@@ -14,6 +13,7 @@ int compare(const void *x, const void *y){
 }
 
 
+
 /*
 * Compare function for sorting nodes per degree
 */
@@ -22,35 +22,41 @@ int ONodesCompare(const ONodes &a, const ONodes &b){
 }
 
 
+
 /*
 * BFS on adjacency matrix performed on CPU
 */
 bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue) {
 	int left = 0, right = 1;			// left = # nodi da cui ho fatto la visita, right = # nodi incontrati durante la visita 
-	//int* Queue = new int[nof_nodes];	// coda dei nodi da visitare
-	vector<bool> Visited(nof_nodes);	// indica se un nodo è stato visitato
-	
+	std::vector<bool> Visited(nof_nodes);	// indica se un nodo è stato visitato
+
 	Queue[0] = source;					// Si parte dalla sorgente
 	Visited[source] = true;				// si marca come visitata
 
-	while (left < right) {				// fino a che ho ancora nodi dai quali non ho fatto partire la visita 
+	while (left < right)				// fino a che ho ancora nodi dai quali non ho fatto partire la visita 
+	{
 		int qNode = Queue[left++];		// qNode = prossimo nodo da cui far partire la visita
 
 		for (int i = 0; i < nof_nodes; ++i) 		// per ogni nodo nella lista di adiacenza di qNode
+		{
 			if(adjMatrix[qNode*nof_nodes + i])
-				if (!Visited[i]) {					// se dest non è ancora stato visitato 
+				if (!Visited[i])					// se dest non è ancora stato visitato
+				{ 
 					Visited[i] = true;				// lo marco come visitato
 					Queue[right++] = i;				// lo aggiungo alla coda dei nodi incontrati durante la visita 
 				}
+		}
 	}
-	//delete [] Queue;
 	return (Visited[target] == true);
 }
 
 
 
-vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
-	vector< ONodes > OrderedNodes(nof_nodes);
+/*
+* Sort nodes per degree
+*/
+std::vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
+	std::vector< ONodes > OrderedNodes(nof_nodes);
 	for (int i = 0; i < nof_nodes; ++i)
 	{
 		OrderedNodes[i].id = i;
@@ -62,7 +68,10 @@ vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
 
 
 
-void ChooseNodes(int* sources, vector< ONodes > OrderedNodes, const int nof_distNodes, const int source, const int target) {
+/*
+* Function that choose nof_distNodes nodes of the graph sorted by degree
+*/
+void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int nof_distNodes, const int source, const int target) {
 
 	sources[0] = source;
 	
@@ -87,11 +96,15 @@ void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, cons
 		sources[1] = target;
 
 	if(nof_distNodes > 2)
-		for (int i = 2; i < nof_distNodes; i++){
+	{
+		for (int i = 2; i < nof_distNodes; i++)
+		{
 			bool isGood = 1;
 			sources[i] = rand() % nof_nodes;
-			for(int j = 0; j < i; j++){
-				if(sources[j] == sources[i]){
+			for(int j = 0; j < i; j++)
+			{
+				if(sources[j] == sources[i])
+				{
 					isGood = 0;
 					break;
 				}
@@ -99,23 +112,90 @@ void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, cons
 			if (!isGood)
 				i--;
 		}
-
+	}
 	return;
 }
 
 
-void GraphToCSR(const edge* graph, int* vertex, int* edges, int N, int E){
-	int j = 0;  // Current adjacency list length
 
-	// for each arc i in the graph
-	for(int i = 0; i < (E); i++){
-		// if i isn't the first arc and 
-		// the src of i is different from the src of i-1 
-		if(i!=0 && graph[i].x != graph[i-1].x){
-			// if the difference between arcs sources == 1 then set src pointer
+/*
+* Min function for percentage evaluation
+*/
+double min(std::vector<long double> data, int n){
+	double min  = 100;
+	for(int i = 0; i < n; i++){
+		min  = (data[i] < min ? data[i] : min);
+	}
+	return min;
+}
+
+
+
+/*
+* Max function for percentage evaluation
+*/
+double max(std::vector<long double> data, int n){
+	double max  = 0;
+	for(int i = 0; i < n; i++){
+		max  = (data[i] > max ? data[i] : max);
+	}
+	return max;
+}
+
+
+
+/*
+* Evaluate mean percentage of visited graph
+*/
+void computeMeanPercentage(std::vector<long double> Percentual, int percentCnt){
+	double sum = 0;
+	for(int i = 0; i < percentCnt; i++)
+		sum += Percentual[i];
+
+	printf("# Completed Visit: %d on %d\n", (N_TEST - percentCnt), N_TEST);
+	if(percentCnt != 0)
+	{
+		printf("AVG Percentual \t\t: %.2f%\n", sum / percentCnt);
+		printf("MIN Percentual \t\t: %.2f%\n", min(Percentual, percentCnt));
+		printf("MAX Percentual \t\t: %.2f%\n", max(Percentual, percentCnt));
+	}
+}
+
+
+
+/*
+* Evaluate Elapsed Time
+*/
+void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_times, int connectCnt){
+	double sum_par = 0;
+	double sum_seq = 0;
+
+	for (int i = 1; i < N_TEST; ++i){
+		sum_par += par_times[i];
+		sum_seq += seq_times[i];
+	}
+
+	printf("\n# Positive Responses: %d on %d\n", (N_TEST - connectCnt), N_TEST);
+	printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST), 27, 0);
+	printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST), 27, 0);
+	printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST), 27, 0);
+}
+
+
+
+/*
+* Function to convert graph into CSR structure
+* !!! DEPRECATED !!!
+*/
+void GraphToCSR(const edge* graph, int* vertex, int* edges, int N, int E){
+	int j = 0;
+
+	for(int i = 0; i < (E); i++)
+	{
+		if(i!=0 && graph[i].x != graph[i-1].x)
+		{
 			if( (graph[i].x - graph[i-1].x) == 1 )
 				vertex[graph[i].x] = vertex[graph[i-1].x] + j;
-			// else set each pointer between the sources to j
 			else
 				for(int l = (graph[i-1].x + 1); l <= N; l++)
 					vertex[l] = vertex[graph[i-1].x] + j;
@@ -124,22 +204,25 @@ void GraphToCSR(const edge* graph, int* vertex, int* edges, int N, int E){
 		if( i == ((E)-1) && graph[i].x < (N-1))
 			for (int l = (graph[i].x + 1); l <=N; l++)
 				vertex[l]++;
-		// Fill adjacency list
 		j++;
 		edges[i] = graph[i].y;
 	}
-	// It is convenient to add a N-th element
 	vertex[N] = E;
 	return;
 }
 
 
+/*
+* Function to read graph from file
+* !!! DEPRECATED !!!
+*/
 void ReadGraph(char *file, edge *graph, int *N, int *E){
 	int x,y;
-	ifstream in (file);
+	std::ifstream in (file);
 	if(in.is_open()){
 		in >> *N >> *E;
-		for(int i = 0; i < *E; i++){	
+		for(int i = 0; i < *E; i++)
+		{	
 			in >> x >> y;
 			graph[i].x = x;
 			graph[i].y = y;
@@ -150,20 +233,4 @@ void ReadGraph(char *file, edge *graph, int *N, int *E){
 		qsort(graph, (*E), sizeof(edge), compare);
 	}
 	return;
-}
-
-double min(vector<long double> data, int n){
-	double min  = 100;
-	for(int i = 0; i < n; i++){
-		min  = (data[i] < min ? data[i] : min);
-	}
-	return min;
-}
-
-double max(vector<long double> data, int n){
-	double max  = 0;
-	for(int i = 0; i < n; i++){
-		max  = (data[i] > max ? data[i] : max);
-	}
-	return max;
 }
