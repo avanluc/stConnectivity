@@ -10,8 +10,13 @@ Thesis project
 - Spatial exploration with more sources	      V
 
 
-# compilation
-g++ stConnectivity.cpp -o ../build/stConnectivity
+# ALGORITHM
+
+while (FrontierStep[i] < FrontierLimit)
+	FrontierStep[i] = FrontierStep[i-1] * AVG_Degree
+Summatory of all FrontierStep = TotalNodesVisitedByBlock
+Nsources = N / TotalNodesVisitedByBlock
+
 
 
 # git

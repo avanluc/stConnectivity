@@ -183,6 +183,27 @@ void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_t
 
 
 
+int EvaluateSourcesNum(float avgDeg, int N){
+
+	int i = 0;
+	float sum = 0;
+	std::vector<float> FrontierStep;
+	FrontierStep.push_back(1.0);
+
+	while(FrontierStep[i] < BLOCK_FRONTIER_LIMIT)
+	{
+		FrontierStep.push_back( FrontierStep[i] * avgDeg );
+		i++;
+	}
+
+	for (int k = 0; k < FrontierStep.size()-1; k++)
+		sum += FrontierStep[k];
+
+	return (int)ceil(N/sum);
+}
+
+
+
 /*
 * Function to convert graph into CSR structure
 * !!! DEPRECATED !!!

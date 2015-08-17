@@ -188,24 +188,57 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 
+/*
+* Read command line parameters
+*/
+void Parameters(int argc, char* argv[], GDirection &GDir, int& Nsources, int& all) {
+    std::string errString(
+    "Syntax Error:\n\n stConnectivity <graph_path> [ <graph_direction> ] [ -n <number_of_sources>] [-A]\n\n\
+    <graph_direction>:\n\
+                    -D      force directed graph\n\
+                    -U      force undirected graph");
 
+    if (argc < 2)
+        error(errString)
+    GDir = UNDEFINED;
+    for (int i = 2; i < argc; ++i)
+    {
+        std::string parameter = argv[i];
+
+        if 		(parameter.compare("-D") == 0)
+            GDir = DIRECTED;
+        else if (parameter.compare("-U") == 0)
+            GDir = UNDIRECTED;
+        else if (parameter.compare("-A") == 0)
+        	all = 1;
+        else if ( /*i + 1 < argc &&*/ parameter.compare("-n") == 0 && 
+        		std::string(argv[i + 1]).find_first_not_of("0123456789") == std::string::npos )
+        {
+            std::istringstream ss(argv[++i]);
+            ss >> Nsources;
+        }
+        else
+            error(errString)
+    }
+}
+
+
+
+/*
+* Main function
+*/
 int main(int argc, char *argv[]){
-
-	/***    CONTROL PARAMETERS NUMBER    ***/
-	if(argc < 2)
-	{
-		printf("\nUsage: ./stConnectivity 'input_file'\n\n");
-		return -1;
-	}
-
 
 	/***    READ GRAPH FROM FILE    ***/
 	int N, E, nof_lines;
- 	GDirection GraphDirection;
- 	GraphDirection = UNDIRECTED;  			//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
+	int Nsources = 0, all = 0;
+ 	GDirection GraphDirection;		//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
+ 	Parameters(argc, argv, GraphDirection, Nsources, all);
  	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
     Graph graph(N, E, GraphDirection);
     readGraph::readSTD(argv[1], graph, nof_lines);
+
+    graph.DegreeAnalisys();
 
 
     /***    PRINT CONFIG INFO    ***/
@@ -221,20 +254,26 @@ int main(int argc, char *argv[]){
 
 
 	/***    LAUNCH ST-CONN FUNCTION    ***/
-    if(argc > 2)
+    if (all)
     {
-    	int Nsources = atoi(argv[2]);
-    	printf("Launch stConnectivity with %d sources\n", Nsources);
+		for (int i = 0; i < LENGTH; ++i)
+		{
+			printf("Launch stConnectivity with %d sources\n\n", SOURCES[i]);
+			doSTCONN(graph, N, E, SOURCES[i]);
+		}
+    }
+    else if(Nsources != 0)
+    {
+    	printf("Launch stConnectivity with %d sources\n\n", Nsources);
 		doSTCONN(graph, N, E, Nsources);
     }
     else
     {
-		for (int i = 0; i < LENGTH; ++i)
-		{
-			printf("Launch stConnectivity with %d sources\n", parameters[i]);
-			doSTCONN(graph, N, E, parameters[i]);
-		}
+    	float avgDeg = (float) E / N;
+    	printf("Evaluating appropriate sources number\n");
+    	Nsources = EvaluateSourcesNum(avgDeg, N);
+    	printf("Launch stConnectivity with %d sources\n\n", Nsources);
+		//doSTCONN(graph, N, E, Nsources);
     }
-
 	return 0;
 }

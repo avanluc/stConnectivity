@@ -178,14 +178,16 @@ void Graph::DegreeAnalisys() {
 	std::pair<int*,int*> minmax = std::minmax_element(OutDegree, OutDegree + V);
 	int zeroDegree = std::count (OutDegree, OutDegree + V, 0);
 	int oneDegree = std::count (OutDegree, OutDegree + V, 1);
+	int minDegree = std::count (OutDegree, OutDegree + V, *minmax.first);
+	int maxDegree = std::count (OutDegree, OutDegree + V, *minmax.second);
 	std::cout << std::setprecision(1)
 			  << "          Avg:  " << avg    << "\t\tOutDegree 0:  " << std::left << std::setw(14) << zeroDegree << fUtil::perCent(zeroDegree, V) << " %" << std::endl
-			  << "     Std. Dev:  " << stdDev << "\t\tOutDegree 1:  " << std::left << std::setw(14) << oneDegree << fUtil::perCent(oneDegree, V) << " %" << std::endl
-			  << "          Min:  " << *minmax.first    << "\t\t" << std::endl
-			  << "          Max:  " << *minmax.second   << "\t\t" << std::endl;
-	if (Direction == DIRECTED)
+			  << "     Std. Dev:  " << stdDev << "\t\tOutDegree 1:  " << std::left << std::setw(14) << oneDegree  << fUtil::perCent(oneDegree, V)  << " %" << std::endl
+			  << "          Min:  " << *minmax.first    << "\t\tOutDegree " << *minmax.first  << ":  " << std::left << std::setw(14) << minDegree << fUtil::perCent(minDegree, V) << " %" << std::endl
+			  << "          Max:  " << *minmax.second   << "\t\tOutDegree " << *minmax.second << ":  " << std::left << std::setw(14) << maxDegree << fUtil::perCent(maxDegree, V) << " %" << std::endl;
+	/*if (Direction == DIRECTED)
 		std::cout << "\t\t\t\t InDegree 0:  " << std::count (InDegree, InDegree + V, 0) << std::endl
-				  << "\t\t\t\t InDegree 1:  " << std::count (InDegree, InDegree + V, 1) << std::endl;
+				  << "\t\t\t\t InDegree 1:  " << std::count (InDegree, InDegree + V, 1) << std::endl;*/
 	std::cout << std::endl;
 	std::cout.imbue(std::locale());
 }

@@ -27,6 +27,7 @@ struct ONodes{
 
 int compare(const void *x, const void *y);
 int ONodesCompare(const ONodes &a, const ONodes &b);
+int EvaluateSourcesNum(float avgDeg, int N);
 bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue);
 void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int nof_distNodes, const int source, const int target);
 void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target);
