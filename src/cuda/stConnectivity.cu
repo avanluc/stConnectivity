@@ -2,6 +2,7 @@
 
 #include "Kernel_StConnectivity.cu"
 #include "stConn.h"
+#include "statistic.h"
 
 
 void doSTCONN(Graph graph, int N, int E, int Nsources){
@@ -19,6 +20,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	int2 *Distance 	= (int2*)calloc(N, sizeof(int2));	
 	int *sources 	= (int*)calloc(Nsources, sizeof(int));
 	int *Queue 		= (int*)calloc(Nsources, sizeof(int));	
+	int *Visited    = (int*)calloc(Nsources, sizeof(int));
 	bool *matrix 	= (bool*)calloc(Nsources * Nsources, sizeof(bool));
 
 
@@ -26,6 +28,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	int *Dedges;
 	int *Dvertex;
 	int *Dsources;
+	int *Dvisited;
 	int2 *Ddistance;
 	bool *DMatrix;
 
@@ -34,6 +37,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeSrcs) );
+	gpuErrchk( cudaMalloc((void **) &Dvisited, 	sizeSrcs) );
 
 
 	/***    SERVICE VARIABLES    ***/
@@ -54,6 +58,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    CHOOSE RANDOM SOURCE, DEST AND EXTRA-SOURCES    ***/
 		int source = rand() % N;
 		int target = rand() % N;
+		while(target == source)		target = rand() % N;
 
 	    ChooseRandomNodes(sources, graph.OutNodes, N, Nsources, source, target);
 
@@ -78,6 +83,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
+	    gpuErrchk( cudaMemcpy(Dvisited, Visited, sizeSrcs, cudaMemcpyHostToDevice) );		
 		if(ATOMIC)
 			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
 	    
@@ -94,7 +100,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    LAUNCH KERNEL    ***/
 		dim3 block(BLOCK_SIZE, 1);
 	    dim3 grid(Nsources, 1);
+	    //printf("Kernel Launched\t");
 	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
+	    //printf("Kernel Executed\n");
 
 
 	    /***    MEMCOPY DEVICE_TO_HOST    ***/
@@ -104,7 +112,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 	    /***    RECORD STOP TIME    ***/
 	    gpuErrchk( cudaEventRecord(stop, NULL) );
-	    gpuErrchk( cudaEventSynchronize(stop) );
+	    //gpuErrchk( cudaEventSynchronize(stop) );
 
 
 	    /***    COPY EXITFLAG FROM DEVICE    ***/
@@ -149,7 +157,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
 	    
-	    if(DEBUG)
+	    if(!BFS && DEBUG)
 			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
@@ -238,6 +246,7 @@ int main(int argc, char *argv[]){
     Graph graph(N, E, GraphDirection);
     readGraph::readSTD(argv[1], graph, nof_lines);
 
+    float avgDeg = (float) E / N;
     graph.DegreeAnalisys();
 
 
@@ -250,30 +259,36 @@ int main(int argc, char *argv[]){
     	 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< std::endl
     	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< std::endl
     	 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
-		 << "--------------------------------------------------------" 			<< std::endl << std::endl;
+		 << "--------------------------------------------------------" 	   << std::endl << std::endl;
 
+    if( graph.getMaxDegree() >= BLOCK_FRONTIER_LIMIT){
+    	std::cout << std::endl << "Graph max degree greater than FRONTIER_LIMIT" << std::endl;
+    	return 0;
+    } 
 
 	/***    LAUNCH ST-CONN FUNCTION    ***/
     if (all)
     {
 		for (int i = 0; i < LENGTH; ++i)
 		{
-			printf("Launch stConnectivity with %d sources\n\n", SOURCES[i]);
+			printf("\n----------Launch stConnectivity with %d sources----------\n\n", SOURCES[i]);
 			doSTCONN(graph, N, E, SOURCES[i]);
 		}
     }
     else if(Nsources != 0)
     {
-    	printf("Launch stConnectivity with %d sources\n\n", Nsources);
+    	std::vector<double> prob = probability(N, Nsources, avgDeg);
+    	for (int i = 0; i < prob.size(); ++i)
+    		std::cout << "P(" << i << ") = " << std::right << std::setw(6) << prob[i] * 100 << "%" << std::endl;
+    	printf("\nLaunch stConnectivity with %d sources\n\n", Nsources);
 		doSTCONN(graph, N, E, Nsources);
     }
     else
     {
-    	float avgDeg = (float) E / N;
     	printf("Evaluating appropriate sources number\n");
     	Nsources = EvaluateSourcesNum(avgDeg, N);
     	printf("Launch stConnectivity with %d sources\n\n", Nsources);
-		//doSTCONN(graph, N, E, Nsources);
+		doSTCONN(graph, N, E, Nsources);
     }
 	return 0;
 }

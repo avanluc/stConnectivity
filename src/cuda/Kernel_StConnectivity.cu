@@ -8,6 +8,7 @@
 __device__ int GlobalCounter = 0;
 __device__ int globalMax = 0;
 __device__ int exitFlag = 0;
+__device__ int GQueue[REG_QUEUE];
 
 extern __shared__ unsigned char SMem[];
 
@@ -86,6 +87,9 @@ __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Qu
 				//cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
 				exitFlag = 1;
 			}
+			/*else{
+				printf("BLOCK_FRONTIER_LIMIT exceded!!!\t I'm trying to write in pos %d\n", pos+i);
+			}*/
 		}
 }
 
@@ -104,7 +108,8 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 									const int* __restrict__ devSource,
 									int2* __restrict__ devDistance,
 									bool* __restrict__ Matrix,
-									const int Nsources) {
+									const int Nsources) 
+{
 	int Queue[REG_QUEUE];
 	int FrontierSize = 1;
 	int level = 0;
@@ -135,21 +140,42 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 			{
 				const int dest = devEdge[k];
 				const int2 destination = devDistance[dest];	
-				if(ATOMIC)
+
+				if(!BFS && ATOMIC)
 				{	
 					int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
-					if ( old == INT_MAX) {	
-						devDistance[dest].x = level;
-						devDistance[dest].y = current.y;
-						Queue[founds++] = dest;
+					if ( old == INT_MAX ) {
+						if(founds < REG_QUEUE)
+						{
+							devDistance[dest].x = level;
+							devDistance[dest].y = current.y;
+							Queue[founds++] = dest;
+						}
+						else
+							devDistance[dest].x = INT_MAX;
 					}
-					/* update adj matrix */
 					else if (destination.y != current.y && destination.y < Nsources){	
 						Matrix[ (current.y * Nsources) + destination.y ] = true;	
 						Matrix[ (destination.y * Nsources) + current.y ] = true;	
 					}
 				}
-				else if(BFS)
+
+				else if(BFS && ATOMIC)
+				{	
+					int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
+					if ( old == INT_MAX ) {
+						if(founds < REG_QUEUE)
+						{
+							devDistance[dest].x = level;
+							devDistance[dest].y = current.y;
+							Queue[founds++] = dest;
+						}
+						else
+							devDistance[dest].x = INT_MAX;
+					}
+				}
+
+				else if(BFS && !ATOMIC)
 				{
 					if (destination.x == INT_MAX){	
 						devDistance[dest].x = level;
@@ -157,6 +183,7 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 						Queue[founds++] = dest;
 					}
 				}
+
 				else
 				{
 					if (destination.x == INT_MAX) {	
@@ -186,3 +213,75 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 			//atomicCAS(&globalMax, globalMax, FrontierSize);
 	}
 }
+
+
+
+__global__ void MatrixBFS(	bool* __restrict__ Matrix,
+							int* __restrict__ Visited,
+							const int src,
+							const int dest,
+							const int Nsources)
+{
+	int founds = 1;
+	int index =  0;
+
+	if (GTid == 0)
+		GQueue[index] = src;
+
+	__syncthreads();
+	if(GTid < Nsources)
+		while(index < founds)
+		{
+			//printf("index = %d \tfounds = %d\n", index, founds);
+			printf("\tVisited vertex %d\n", GQueue[index]);
+			Visited[GQueue[index]] = 1;
+			if(Matrix[ (GQueue[index++] * Nsources) + GTid ] && !Visited[GTid])
+		 	{
+		 		GQueue[founds++] = GTid;
+ 				printf("aggiunto nodo %d\n", GQueue[founds-1]);
+		 	}
+		}
+}
+
+__global__ void MatrixBFS1(	bool* __restrict__ Matrix,
+							int* __restrict__ Visited,
+							const int src,
+							const int dest,
+							const int Nsources)
+{
+	int founds = 1;
+	int index =  0;
+	//int Queue[REG_QUEUE];
+
+	if (GTid == 0){
+		GQueue[index] = src;
+		//Visited[src] = 1;
+	}
+
+	__syncthreads();
+	if(GTid < Nsources)
+	{
+		//printf("Matrix[%d] = %d\n", GQueue[index] * Nsources + GTid, Matrix[ (GQueue[index] * Nsources) + GTid ]);
+		while(index < founds)
+		{
+			//printf("index = %d \tfounds = %d\n", index, founds);
+			//printf("\tVisited vertex %d\n", GQueue[index]);
+			Visited[GQueue[index]] = 1;
+			if(Matrix[ (GQueue[index++] * Nsources) + GTid ] && !Visited[GTid])
+		 	{
+		 		//printf("\tVisited vertex %d\n", GTid);
+		 		Visited[GTid] = 1;
+		 		for (int i = 0; i < Nsources; i++)
+		 		{
+		 			//printf("Condition %d: %d and %d\n", i, Matrix[ (GTid * Nsources) + i ], !Visited[i]);
+		 			if(Matrix[ (GTid * Nsources) + i ] && !Visited[i]){
+		 				GQueue[founds++] = i;
+		 				//printf("aggiunto nodo %d\n", GQueue[founds-1]);
+		 			}
+		 		}
+		 	}
+		}
+	}
+}
+
+

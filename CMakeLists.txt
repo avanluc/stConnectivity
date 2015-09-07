@@ -32,7 +32,8 @@ include_directories(${PROJECT_SOURCE_DIR}/cub/
 					${PROJECT_SOURCE_DIR}/Util/)
 
 set(HOST_SRC 	${PROJECT_SOURCE_DIR}/src/cuda/graph.cpp
-				${PROJECT_SOURCE_DIR}/src/cuda/stConn.cpp)
+				${PROJECT_SOURCE_DIR}/src/cuda/stConn.cpp
+				${PROJECT_SOURCE_DIR}/src/cuda/statistic.cpp)
 
 set(DEVICE_SRC 	${PROJECT_SOURCE_DIR}/src/cuda/ptx.cu)
 			

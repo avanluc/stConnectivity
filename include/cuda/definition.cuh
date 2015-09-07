@@ -1,7 +1,7 @@
 #pragma once
 
 /* DEBUG CONFIG */
-#define				     BFS	0
+#define				     BFS	1
 #define				   DEBUG	1
 #define				   ATOMIC	1
 #define			SINGLE_BLOCK	0
@@ -17,6 +17,7 @@
 #define 			Int_Size	4
 #define		  MAX_CONCURR_TH	(Thread_Per_SM * N_OF_SMs)
 #define		 SMem_Per_Thread	(SMem_Per_SM / Thread_Per_SM)
+#define					GTid	(Bid * BLOCK_SIZE) + Tid
 
 const int IntSMem_Per_Thread  =  SMem_Per_Thread / Int_Size;
 const int REG_QUEUE  = 	32;
@@ -40,5 +41,5 @@ const int REG_QUEUE  = 	32;
 #define cudaAssert(condition, pos) \
   if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); /*exitFlag = 1;*/ }
 
-const int SOURCES[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000};
+const int SOURCES[] = {10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
 const int LENGTH = sizeof(SOURCES) / sizeof(int);

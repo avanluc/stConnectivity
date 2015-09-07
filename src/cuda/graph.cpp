@@ -139,6 +139,11 @@ int Graph::getMaxDistance() {
 	return Distance[Queue[right - 1]];
 }
 
+int Graph::getMaxDegree(){
+	std::pair<int*,int*> minmax = std::minmax_element(OutDegree, OutDegree + V);
+	return *minmax.second;
+}
+
 void Graph::bfsFrontier(std::vector<int>& Frontiers) {
 	int oldDistance = 0;
 	Frontiers.push_back(1);

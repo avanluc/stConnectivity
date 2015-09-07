@@ -38,6 +38,7 @@ class Graph {
 		int visitedNodes();
 		int visitedEdges();
 		int getMaxDistance();
+		int getMaxDegree();
 
 		void DegreeAnalisys();
 };
