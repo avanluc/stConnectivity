@@ -6,7 +6,6 @@
 #include "definition.cuh"
 
 __device__ int GlobalCounter = 0;
-__device__ int globalMax = 0;
 __device__ int exitFlag = 0;
 __device__ int GQueue[REG_QUEUE];
 
@@ -41,7 +40,9 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
 }
 
 
-
+/*
+* 
+*/
 __device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int founds, int& n, int &totalBlock, int& globalOffset){
 	int* SM = (int*) &SMem[TEMP_POS];
 	n = founds;
@@ -69,40 +70,36 @@ __device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int found
 }
 
 
-
-__device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int founds) {
+/*
+*
+*/
+__device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int* Exit_Flag, int founds) {
 		
-		int n, total, globalOffset;
-		FrontierReserve_Block(Front_size, founds, n, total, globalOffset);
+	int n, total, globalOffset;
+	FrontierReserve_Block(Front_size, founds, n, total, globalOffset);
 
-		const int pos = globalOffset + n;
-		for (int i = 0; i < founds; i++)
+	const int pos = globalOffset + n;
+	for (int i = 0; i < founds; i++)
+	{
+		if((pos + i) < BLOCK_FRONTIER_LIMIT)
 		{
-			if((pos + i) < BLOCK_FRONTIER_LIMIT)
-			{
-				devFrontier[pos + i] = Queue[i];
-			}
-			else if(!ATOMIC)
-			{
-				//cudaAssert((pos + i) < BLOCK_FRONTIER_LIMIT, (pos + i));
-				exitFlag = 1;
-			}
-			/*else{
-				printf("BLOCK_FRONTIER_LIMIT exceded!!!\t I'm trying to write in pos %d\n", pos+i);
-			}*/
+			devFrontier[pos + i] = Queue[i];
 		}
+		else if(!ATOMIC)
+		{
+			exitFlag = 1;
+		}
+		else
+		{
+			Exit_Flag[0] = 1;
+		}
+	}
 }
 
 
-
-__device__ __forceinline__ void swapDev(int*& A, int*& B) {
-	int* temp = A;
-	A = B;
-	B = temp;
-}
-
-
-
+/*
+*
+*/
 __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
 									const int* __restrict__ devSource,
@@ -119,98 +116,105 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
+	int* Block_Exit = (int*) &SMem[EXIT_FLAG];
 
-	if (Tid < FrontierSize)
-		SMemF1[Tid] = devSource[blockIdx.x]; 
-
-	while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
+	for(int j = Bid; j < Nsources; j += gridDim.x)
 	{
-		if(!ATOMIC && exitFlag)
-			break;
-
-		int founds = 0;
-		for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE)
+		Block_Exit[0] = 0;
+		if (Tid < FrontierSize)
+			SMemF1[Tid] = devSource[j];
+	
+		while (FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
 		{
-			const int index = SMemF1[t];
-			const int start = devNode[index];
-			const int2 current = devDistance[index];
-			int end = devNode[index + 1];	
-
-			for (int k = start; k < end; k++)
+			if(!ATOMIC && exitFlag)
+				break;
+			if(Block_Exit[0])
+				break;
+	
+			int founds = 0;
+			for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE)
 			{
-				const int dest = devEdge[k];
-				const int2 destination = devDistance[dest];	
-
-				if(!BFS && ATOMIC)
-				{	
-					int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
-					if ( old == INT_MAX ) {
-						if(founds < REG_QUEUE)
-						{
+				const int index = SMemF1[t];
+				const int start = devNode[index];
+				const int2 current = devDistance[index];
+				int end = devNode[index + 1];	
+	
+				for (int k = start; k < end; k++)
+				{
+					const int dest = devEdge[k];
+					const int2 destination = devDistance[dest];	
+	
+					if(!BFS && ATOMIC)
+					{	
+						int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
+						if ( old == INT_MAX ) {
+							if(founds < REG_QUEUE)
+							{
+								devDistance[dest].x = level;
+								devDistance[dest].y = current.y;
+								Queue[founds++] = dest;
+							}
+							else
+								devDistance[dest].x = INT_MAX;
+						}
+						else if (destination.y != current.y && destination.y < Nsources){	
+							Matrix[ (current.y * Nsources) + destination.y ] = true;	
+							Matrix[ (destination.y * Nsources) + current.y ] = true;	
+						}
+					}
+	
+					else if(BFS && ATOMIC)
+					{	
+						int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
+						if ( old == INT_MAX ) {
+							if(founds < REG_QUEUE)
+							{
+								devDistance[dest].x = level;
+								devDistance[dest].y = current.y;
+								Queue[founds++] = dest;
+							}
+							else
+								devDistance[dest].x = INT_MAX;
+						}
+					}
+	
+					else if(BFS && !ATOMIC)
+					{
+						if (destination.x == INT_MAX){	
 							devDistance[dest].x = level;
 							devDistance[dest].y = current.y;
 							Queue[founds++] = dest;
 						}
-						else
-							devDistance[dest].x = INT_MAX;
 					}
-					else if (destination.y != current.y && destination.y < Nsources){	
-						Matrix[ (current.y * Nsources) + destination.y ] = true;	
-						Matrix[ (destination.y * Nsources) + current.y ] = true;	
-					}
-				}
-
-				else if(BFS && ATOMIC)
-				{	
-					int old = atomicCAS(&devDistance[dest].x, INT_MAX, level);
-					if ( old == INT_MAX ) {
-						if(founds < REG_QUEUE)
-						{
+	
+					else
+					{
+						if (destination.x == INT_MAX) {	
 							devDistance[dest].x = level;
 							devDistance[dest].y = current.y;
 							Queue[founds++] = dest;
 						}
-						else
-							devDistance[dest].x = INT_MAX;
-					}
-				}
-
-				else if(BFS && !ATOMIC)
-				{
-					if (destination.x == INT_MAX){	
-						devDistance[dest].x = level;
-						devDistance[dest].y = current.y;
-						Queue[founds++] = dest;
-					}
-				}
-
-				else
-				{
-					if (destination.x == INT_MAX) {	
-						devDistance[dest].x = level;
-						devDistance[dest].y = current.y;
-						Queue[founds++] = dest;
-					}
-					else if (destination.y != current.y && destination.y < Nsources){	
-						Matrix[ (current.y * Nsources) + destination.y ] = true;	
-						Matrix[ (destination.y * Nsources) + current.y ] = true;	
+						else if (destination.y != current.y && destination.y < Nsources){	
+							Matrix[ (current.y * Nsources) + destination.y ] = true;	
+							Matrix[ (destination.y * Nsources) + current.y ] = true;	
+						}
 					}
 				}
 			}
+			
+			Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
+	
+			level++;
+	
+			FrontierSize = F2SizePtr[0];
+			if(ATOMIC && Tid == 0)
+				atomicAdd(&GlobalCounter, FrontierSize);
+	
+			__syncthreads();
+			F2SizePtr[0] = 0;
 		}
-		
-		Write(SMemF1, &F2SizePtr[0], Queue, founds);
-
-		level++;
-
-		FrontierSize = F2SizePtr[0];
-		if(ATOMIC && Tid == 0)
-			atomicAdd(&GlobalCounter, FrontierSize);
-
-		__syncthreads();
-		F2SizePtr[0] = 0;
-		//if(Tid == 0 && FrontierSize > globalMax);
-			//atomicCAS(&globalMax, globalMax, FrontierSize);
+		level = 0;
+		FrontierSize = 1;
 	}
 }
 

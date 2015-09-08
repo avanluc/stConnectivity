@@ -52,7 +52,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	srand (time(NULL));
- 	for (int test = 0; test < N_TEST; test++)
+ 	for (int test = 0; test < N_TEST; ++test)
 	{
 
 		/***    CHOOSE RANDOM SOURCE, DEST AND EXTRA-SOURCES    ***/
@@ -60,16 +60,16 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		int target = rand() % N;
 		while(target == source)		target = rand() % N;
 
-	    ChooseRandomNodes(sources, graph.OutNodes, N, Nsources, source, target);
+	    ChooseRandomNodes(sources, N, Nsources, source, target);
 
 
 	    /***    STRUCTURES INITIALIZATION    ***/
-	    for (int i = 0; i < N; i++){
+	    for (int i = 0; i < N; ++i){
 	    	Distance[i].x = INT_MAX;
 	    	Distance[i].y = INT_MAX;
 	    }
 
-	    for (int i = 0; i < Nsources; i++){
+	    for (int i = 0; i < Nsources; ++i){
 			int j = sources[i];
 			Distance[j].x = 0;
 			Distance[j].y = i;
@@ -99,10 +99,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 		/***    LAUNCH KERNEL    ***/
 		dim3 block(BLOCK_SIZE, 1);
-	    dim3 grid(Nsources, 1);
-	    //printf("Kernel Launched\t");
+	    dim3 grid(MAX_CONCURR_BL(BLOCK_SIZE), 1);
 	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
-	    //printf("Kernel Executed\n");
 
 
 	    /***    MEMCOPY DEVICE_TO_HOST    ***/
@@ -112,7 +110,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 	    /***    RECORD STOP TIME    ***/
 	    gpuErrchk( cudaEventRecord(stop, NULL) );
-	    //gpuErrchk( cudaEventSynchronize(stop) );
+	    gpuErrchk( cudaEventSynchronize(stop) );
 
 
 	    /***    COPY EXITFLAG FROM DEVICE    ***/
@@ -120,6 +118,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		    int Flag = 0;
 		    gpuErrchk( cudaMemcpyFromSymbol(&Flag, exitFlag, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		    if(Flag){
+		    	printf("Shared Memory Exceded!!!\n");
 		    	unfinishedCnt = N_TEST - test;
 		    	break;
 		    }
@@ -261,10 +260,10 @@ int main(int argc, char *argv[]){
     	 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
 		 << "--------------------------------------------------------" 	   << std::endl << std::endl;
 
-    if( graph.getMaxDegree() >= BLOCK_FRONTIER_LIMIT){
+    /*if( graph.getMaxDegree() >= BLOCK_FRONTIER_LIMIT){
     	std::cout << std::endl << "Graph max degree greater than FRONTIER_LIMIT" << std::endl;
     	return 0;
-    } 
+    } */
 
 	/***    LAUNCH ST-CONN FUNCTION    ***/
     if (all)

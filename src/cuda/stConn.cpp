@@ -69,16 +69,16 @@ std::vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
 
 
 /*
-* Function that choose nof_distNodes nodes of the graph sorted by degree
+* Function that choose Nsources nodes of the graph sorted by degree
 */
-void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int nof_distNodes, const int source, const int target) {
+void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int Nsources, const int source, const int target) {
 
 	sources[0] = source;
 	
-	if(nof_distNodes > 1)		
+	if(Nsources > 1)		
 		sources[1] = target;
-	if(nof_distNodes > 2)
-		for (int i = 2; i < nof_distNodes; i++)
+	if(Nsources > 2)
+		for (int i = 2; i < Nsources; ++i)
 			sources[i] = OrderedNodes[i].id;
 	return;
 }
@@ -86,22 +86,23 @@ void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int nof
 
 
 /*
-* Function that choose nof_distNodes nodes of the graph
+* Function that choose Nsources nodes of the graph
+* !!! DEPRECATED !!!
 */
-void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, const int nof_distNodes, const int source, const int target) {
+void ChooseRandomNodes1(int* sources, const int nof_nodes, const int Nsources, const int source, const int target) {
 
 	sources[0] = source;
 	
-	if(nof_distNodes > 1)
+	if(Nsources > 1)
 		sources[1] = target;
 
-	if(nof_distNodes > 2)
+	if(Nsources > 2)
 	{
-		for (int i = 2; i < nof_distNodes; i++)
+		for (int i = 2; i < Nsources; ++i)
 		{
 			bool isGood = 1;
 			sources[i] = rand() % nof_nodes;
-			for(int j = 0; j < i; j++)
+			for(int j = 0; j < i; ++j)
 			{
 				if(sources[j] == sources[i])
 				{
@@ -112,6 +113,29 @@ void ChooseRandomNodes(int* sources, const int* Nodes, const int nof_nodes, cons
 			if (!isGood)
 				i--;
 		}
+	}
+	return;
+}
+
+/*
+* Function that choose Nsources nodes of the graph
+*/
+void ChooseRandomNodes(int* sources, const int V, const int Nsources, const int src, const int dst) {
+
+	int j = 0;
+	std::set<int> SourceSet;
+	std::set<int>::iterator it;
+
+	SourceSet.insert(src);
+
+	if (Nsources > 1 )	SourceSet.insert(dst);
+	if (Nsources > 2 )
+	{
+		while(SourceSet.size() < Nsources)
+			SourceSet.insert(rand() % V);
+
+		for (it=SourceSet.begin(); it!=SourceSet.end(); ++it, ++j)
+			sources[j] = *it;
 	}
 	return;
 }
