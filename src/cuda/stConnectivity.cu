@@ -84,9 +84,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 	    gpuErrchk( cudaMemcpy(Dvisited, Visited, sizeSrcs, cudaMemcpyHostToDevice) );		
-		if(ATOMIC)
+		#if ATOMIC
 			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
-	    
+	    #endif
 		
 		/***    ALLOCATE CUDA EVENT FOR TIMING    ***/
 	    cudaEvent_t start;
@@ -98,14 +98,14 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 		/***    LAUNCH KERNEL    ***/
-		dim3 block(BLOCK_SIZE, 1);
-	    dim3 grid(MAX_CONCURR_BL(BLOCK_SIZE), 1);
-	    BFS_BlockKernel<<< grid, block, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
+		BFS_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
 
 
 	    /***    MEMCOPY DEVICE_TO_HOST    ***/
-	    if(!BFS)
+	    #if !BFS
 			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+		#endif
 
 
 	    /***    RECORD STOP TIME    ***/
@@ -114,7 +114,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	    /***    COPY EXITFLAG FROM DEVICE    ***/
-	    if(!ATOMIC){
+	    #if !ATOMIC
 		    int Flag = 0;
 		    gpuErrchk( cudaMemcpyFromSymbol(&Flag, exitFlag, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		    if(Flag){
@@ -122,11 +122,11 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		    	unfinishedCnt = N_TEST - test;
 		    	break;
 		    }
-	    }
+	    #endif
 
 
 	    /***    CHECK VISIT PERCENTAGE IF IT FAILS    ***/
-	    if(ATOMIC){
+	    #if(ATOMIC)
 			gpuErrchk( cudaMemcpyFromSymbol(&VisitedNodes, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 			VisitedNodes += Nsources;
 			perc = ((long double)VisitedNodes / (long double)N) * 100;
@@ -135,7 +135,10 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 				Percentual[percCounter] = perc;
 				percCounter++;
 			}
-		}
+		#endif
+
+		/***    PRINT MATRIX    ***/
+		//PrintMatrix<bool>(matrix, Nsources);
 
 
 	    float msecTotal = 0.0f;
@@ -144,22 +147,23 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	    /***    MATRIX VISIT ON HOST    ***/
-	    if(!BFS){
+	    #if !BFS
 		    Timer<HOST> TM;
 		    TM.start();		    
 			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
 			TM.stop();	    	
 		    msecTotal1 = TM.duration();
-	    }
+	    #endif
 
 
 		/***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
 	    
-	    if(!BFS && DEBUG)
-			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \tElapsed time = %c[%d;%dm%.1f%c[%dm ms\n", 
+	    #if (!BFS && DEBUG)
+			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+		#endif
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;
 		
@@ -172,14 +176,14 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	
 
 	/***    EVALUATE MEAN TIMES    ***/
-	if(N_TEST > 1)
+	#if(N_TEST > 1)
 		computeElapsedTime( par_times, seq_times, connectCnt);
-
+	#endif
 
 	/***    EVALUATE MEAN PERCENTAGE    ***/
-	if(ATOMIC)
+	#if ATOMIC
 		computeMeanPercentage(Percentual, percCounter);
-
+	#endif
 	
 	/***    FREE DEVICE MEMORY    ***/
     cudaFree(Ddistance);

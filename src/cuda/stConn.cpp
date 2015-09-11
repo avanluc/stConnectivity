@@ -4,26 +4,6 @@
 
 
 /*
-* Compare function for sorting
-*/
-int compare(const void *x, const void *y){
-	edge a = *(edge *)x;
-	edge b = *(edge *)y;
-	return a.x < b.x ? -1 : (a.x > b.x ? 1 : (a.y < b.y ? -1 : a.y > b.y));
-}
-
-
-
-/*
-* Compare function for sorting nodes per degree
-*/
-int ONodesCompare(const ONodes &a, const ONodes &b){
-	return a.degree > b.degree;
-}
-
-
-
-/*
 * BFS on adjacency matrix performed on CPU
 */
 bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue) {
@@ -53,71 +33,6 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 
 
 /*
-* Sort nodes per degree
-*/
-std::vector< ONodes > OrderNodes(const int* Nodes, const int nof_nodes){
-	std::vector< ONodes > OrderedNodes(nof_nodes);
-	for (int i = 0; i < nof_nodes; ++i)
-	{
-		OrderedNodes[i].id = i;
-		OrderedNodes[i].degree = Nodes[i+1] - Nodes[i];	
-	}
-	sort(OrderedNodes.begin(), OrderedNodes.end(), ONodesCompare);
-	return OrderedNodes;
-}
-
-
-
-/*
-* Function that choose Nsources nodes of the graph sorted by degree
-*/
-void ChooseNodes(int* sources, std::vector< ONodes > OrderedNodes, const int Nsources, const int source, const int target) {
-
-	sources[0] = source;
-	
-	if(Nsources > 1)		
-		sources[1] = target;
-	if(Nsources > 2)
-		for (int i = 2; i < Nsources; ++i)
-			sources[i] = OrderedNodes[i].id;
-	return;
-}
-
-
-
-/*
-* Function that choose Nsources nodes of the graph
-* !!! DEPRECATED !!!
-*/
-void ChooseRandomNodes1(int* sources, const int nof_nodes, const int Nsources, const int source, const int target) {
-
-	sources[0] = source;
-	
-	if(Nsources > 1)
-		sources[1] = target;
-
-	if(Nsources > 2)
-	{
-		for (int i = 2; i < Nsources; ++i)
-		{
-			bool isGood = 1;
-			sources[i] = rand() % nof_nodes;
-			for(int j = 0; j < i; ++j)
-			{
-				if(sources[j] == sources[i])
-				{
-					isGood = 0;
-					break;
-				}
-			}
-			if (!isGood)
-				i--;
-		}
-	}
-	return;
-}
-
-/*
 * Function that choose Nsources nodes of the graph
 */
 void ChooseRandomNodes(int* sources, const int V, const int Nsources, const int src, const int dst) {
@@ -136,61 +51,6 @@ void ChooseRandomNodes(int* sources, const int V, const int Nsources, const int 
 
 		for (it=SourceSet.begin(); it!=SourceSet.end(); ++it, ++j)
 			sources[j] = *it;
-	}
-	return;
-}
-
-
-
-/*
-* Function to convert graph into CSR structure
-* !!! DEPRECATED !!!
-*/
-void GraphToCSR(const edge* graph, int* vertex, int* edges, int N, int E){
-	int j = 0;
-
-	for(int i = 0; i < (E); i++)
-	{
-		if(i!=0 && graph[i].x != graph[i-1].x)
-		{
-			if( (graph[i].x - graph[i-1].x) == 1 )
-				vertex[graph[i].x] = vertex[graph[i-1].x] + j;
-			else
-				for(int l = (graph[i-1].x + 1); l <= N; l++)
-					vertex[l] = vertex[graph[i-1].x] + j;
-			j = 0;
-		}
-		if( i == ((E)-1) && graph[i].x < (N-1))
-			for (int l = (graph[i].x + 1); l <=N; l++)
-				vertex[l]++;
-		j++;
-		edges[i] = graph[i].y;
-	}
-	vertex[N] = E;
-	return;
-}
-
-
-
-/*
-* Function to read graph from file
-* !!! DEPRECATED !!!
-*/
-void ReadGraph(char *file, edge *graph, int *N, int *E){
-	int x,y;
-	std::ifstream in (file);
-	if(in.is_open()){
-		in >> *N >> *E;
-		for(int i = 0; i < *E; i++)
-		{	
-			in >> x >> y;
-			graph[i].x = x;
-			graph[i].y = y;
-			if(x >= *N || y >= *N)
-				printf("Error at row %d: node id > # nodes\n", i+2);
-		}
-		// Sorting graph using specified compare function
-		qsort(graph, (*E), sizeof(edge), compare);
 	}
 	return;
 }
