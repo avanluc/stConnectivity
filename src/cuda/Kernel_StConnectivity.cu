@@ -70,76 +70,8 @@ __device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int found
 }
 
 
-
-__device__ __forceinline__ int VisitNode(const int* __restrict__ devEdge,
-										  const int* __restrict__ devNode,
-										  int2* __restrict__ devDistance,
-										  bool* __restrict__ Matrix,
-										  const int Nsources,
-										  int t,
-										  int level,
-										  int* Queue,
-										  int* SMemF1,
-										  int founds){
-	const int index    = SMemF1[t];
-	const int start    = devNode[index];
-	const int2 current = devDistance[index];
-	int end = devNode[index + 1];
-
-	for (int k = start; k < end; k++)
-	{
-		const int dest = devEdge[k];
-		const int2 destination = devDistance[dest];	
-
-		#if (!BFS && ATOMIC)
-			
-			//counter++;
-			if(founds < REG_QUEUE)
-			{
-				if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
-					devDistance[dest].y = current.y;
-					Queue[founds++] = dest;
-				}
-				else if (destination.y != current.y && destination.y < Nsources){	
-					Matrix[ (current.y     * Nsources) + destination.y ] = true;	
-					Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
-				}
-			}
-		
-		#elif (BFS && ATOMIC)	
-			//counter++;
-			if(founds < REG_QUEUE)
-			{
-				if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
-					devDistance[dest].y = current.y;
-					Queue[founds++] = dest;
-				}
-			}
-
-		#elif (BFS && !ATOMIC)
-			if (destination.x == INT_MAX){	
-				devDistance[dest].x = level;
-				devDistance[dest].y = current.y;
-				Queue[founds++] = dest;
-			}
-
-		#else
-			if (destination.x == INT_MAX) {	
-				devDistance[dest].x = level;
-				devDistance[dest].y = current.y;
-				Queue[founds++] = dest;
-			}
-			else if (destination.y != current.y && destination.y < Nsources){	
-				Matrix[ (current.y     * Nsources) + destination.y ] = true;	
-				Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
-			}
-		#endif
-	}
-	return founds;
-}
-
 /*
-* Write in shared memory all the queues
+*
 */
 __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int* Exit_Flag, int founds) {
 		
@@ -166,7 +98,7 @@ __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Qu
 
 
 /*
-* Kernel with stConnectivity function
+*
 */
 __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
@@ -204,19 +136,60 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 			int founds = 0; //int counter = 0;
 			for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE)
 			{
-					
+				const int index = SMemF1[t];
+				const int start = devNode[index];
+				const int2 current = devDistance[index];
+				int end = devNode[index + 1];	
 		
-
-
-
-
-				founds += VisitNode(devEdge, devNode, devDistance, Matrix, Nsources, t, level, Queue, SMemF1, founds);
-
-
-
-
-
-				
+				for (int k = start; k < end; k++)
+				{
+					const int dest = devEdge[k];
+					const int2 destination = devDistance[dest];	
+	
+					#if (!BFS && ATOMIC)
+						
+						//counter++;
+						if(founds < REG_QUEUE)
+						{
+							if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
+								devDistance[dest].y = current.y;
+								Queue[founds++] = dest;
+							}
+							else if (destination.y != current.y && destination.y < Nsources){	
+								Matrix[ (current.y     * Nsources) + destination.y ] = true;	
+								Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
+							}
+						}
+					
+					#elif (BFS && ATOMIC)	
+						//counter++;
+						if(founds < REG_QUEUE)
+						{
+							if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
+								devDistance[dest].y = current.y;
+								Queue[founds++] = dest;
+							}
+						}
+	
+					#elif (BFS && !ATOMIC)
+						if (destination.x == INT_MAX){	
+							devDistance[dest].x = level;
+							devDistance[dest].y = current.y;
+							Queue[founds++] = dest;
+						}
+	
+					#else
+						if (destination.x == INT_MAX) {	
+							devDistance[dest].x = level;
+							devDistance[dest].y = current.y;
+							Queue[founds++] = dest;
+						}
+						else if (destination.y != current.y && destination.y < Nsources){	
+							Matrix[ (current.y     * Nsources) + destination.y ] = true;	
+							Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
+						}
+					#endif
+				}
 			}
 			
 			Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
@@ -227,7 +200,7 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 			#if ATOMIC
 				//atomicAdd(&GlobalCounter, counter);
 				if (Tid == 0)
-					atomicAdd(&GlobalCounter, FrontierSize);
+					printf("Visited %d\n",atomicAdd(&GlobalCounter, FrontierSize));
 			#endif
 	
 			__syncthreads();
@@ -240,9 +213,6 @@ __global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
 
 
 
-/*
-* MATRIX STCONN
-*/
 __global__ void MatrixBFS1(	bool* __restrict__ Matrix,
 							int* __restrict__ Visited,
 							const int src,
