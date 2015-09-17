@@ -75,7 +75,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 			Distance[j].y = i;
 		}
 		
-		int VisitedNodes = 0;
+		int VisitedEdges = 0;
 	    
 	    /***    MEMCOPY HOST_TO_DEVICE    ***/
 	    gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
@@ -85,15 +85,17 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 	    gpuErrchk( cudaMemcpy(Dvisited, Visited, sizeSrcs, cudaMemcpyHostToDevice) );		
 		#if ATOMIC
-			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedNodes, sizeof(int)) );
+			gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int)) );
 	    #endif
 		
 		/***    ALLOCATE CUDA EVENT FOR TIMING    ***/
-	    cudaEvent_t start;
-	    cudaEvent_t stop;
+	    cudaEvent_t start, start1;
+	    cudaEvent_t stop, stop1;
 
 	    gpuErrchk( cudaEventCreate(&start) );
 	    gpuErrchk( cudaEventCreate(&stop) );
+	    gpuErrchk( cudaEventCreate(&start1) );
+	    gpuErrchk( cudaEventCreate(&stop1) );
 	    gpuErrchk( cudaEventRecord(start, NULL) );
 
 
@@ -127,18 +129,18 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 	    /***    CHECK VISIT PERCENTAGE IF IT FAILS    ***/
 	    #if(ATOMIC)
-			gpuErrchk( cudaMemcpyFromSymbol(&VisitedNodes, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-			VisitedNodes += Nsources;
-			perc = ((long double)VisitedNodes / (long double)N) * 100;
-			if(VisitedNodes < N){
-				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t\t\t%.2Lf%\n", perc);
+			gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			VisitedEdges += Nsources;
+			perc = ((long double)VisitedEdges / (long double)N) * 100.0;
+			if(VisitedEdges != N){
+				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, N, perc);
 				Percentual[percCounter] = perc;
 				percCounter++;
 			}
 		#endif
 
 		/***    PRINT MATRIX    ***/
-		//PrintMatrix<bool>(matrix, Nsources);
+		PrintMatrix<bool>(matrix, Nsources);
 
 
 	    float msecTotal = 0.0f;
@@ -147,22 +149,35 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	    /***    MATRIX VISIT ON HOST    ***/
-	    #if !BFS
+/*	    #if !BFS
 		    Timer<HOST> TM;
 		    TM.start();		    
 			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
 			TM.stop();	    	
 		    msecTotal1 = TM.duration();
 	    #endif
+*/
+	    gpuErrchk( cudaEventRecord(start1, NULL) );
+		MatrixBFS1<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+	    			(DMatrix, Dvisited, 0, 1, Nsources);
 
+	    cudaDeviceSynchronize();
+
+	    gpuErrchk( cudaEventRecord(stop1, NULL) );
+	    gpuErrchk( cudaEventSynchronize(stop1) );
+	    //int result = 0;
+		gpuErrchk( cudaMemcpyFromSymbol(&connect, connected, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 
 		/***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
+	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
 	    
 	    #if (!BFS && DEBUG)
 			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
+			if(!connect)
+				return;
 		#endif
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;

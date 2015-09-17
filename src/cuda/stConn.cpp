@@ -7,23 +7,24 @@
 * BFS on adjacency matrix performed on CPU
 */
 bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue) {
-	int left = 0, right = 1;			// left = # nodi da cui ho fatto la visita, right = # nodi incontrati durante la visita 
-	std::vector<bool> Visited(nof_nodes);	// indica se un nodo è stato visitato
+	int left = 0, right = 1;
+	std::vector<bool> Visited(nof_nodes);
 
-	Queue[0] = source;					// Si parte dalla sorgente
-	Visited[source] = true;				// si marca come visitata
+	Queue[0] = source;
+	Visited[source] = true;
 
-	while (left < right)				// fino a che ho ancora nodi dai quali non ho fatto partire la visita 
+	while (left < right)
 	{
-		int qNode = Queue[left++];		// qNode = prossimo nodo da cui far partire la visita
-
-		for (int i = 0; i < nof_nodes; ++i) 		// per ogni nodo nella lista di adiacenza di qNode
+		int qNode = Queue[left++];
+		for (int i = 0; i < nof_nodes; ++i)
 		{
 			if(adjMatrix[qNode*nof_nodes + i])
-				if (!Visited[i])					// se dest non è ancora stato visitato
+				if(i == target)
+					return true;
+				if (!Visited[i])
 				{ 
-					Visited[i] = true;				// lo marco come visitato
-					Queue[right++] = i;				// lo aggiungo alla coda dei nodi incontrati durante la visita 
+					Visited[i] = true;
+					Queue[right++] = i;
 				}
 		}
 	}

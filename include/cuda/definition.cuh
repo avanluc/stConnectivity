@@ -4,7 +4,7 @@
 #define				     BFS	0
 #define				   DEBUG	1
 #define				   ATOMIC	1
-#define				  N_TEST 	100
+#define				  N_TEST 	1000
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
