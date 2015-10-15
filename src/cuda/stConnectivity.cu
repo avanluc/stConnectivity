@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Kernel_StConnectivity.cu"
+#include "Kernel_STCONN.cu"
 #include "stConn.h"
 #include "statistic.h"
 
@@ -91,6 +91,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    ALLOCATE CUDA EVENT FOR TIMING    ***/
 	    cudaEvent_t start, start1;
 	    cudaEvent_t stop, stop1;
+	    float msecTotal = 0.0f;
+	    float msecTotal1 = 0.0f;
+	    bool connect = false;
 
 	    gpuErrchk( cudaEventCreate(&start) );
 	    gpuErrchk( cudaEventCreate(&stop) );
@@ -100,14 +103,13 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 		/***    LAUNCH KERNEL    ***/
-		BFS_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+		#if BFS
+			BFS_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
 	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
-
-
-	    /***    MEMCOPY DEVICE_TO_HOST    ***/
-	    #if !BFS
-			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-		#endif
+	    #else
+			STCONN_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, Nsources);
+	    #endif
 
 
 	    /***    RECORD STOP TIME    ***/
@@ -128,57 +130,51 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	    /***    CHECK VISIT PERCENTAGE IF IT FAILS    ***/
-	    #if(ATOMIC)
+	    #if(ATOMIC && DEBUG)
 			gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-			VisitedEdges += Nsources;
-			perc = ((long double)VisitedEdges / (long double)N) * 100.0;
-			if(VisitedEdges != N){
-				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, N, perc);
+			//VisitedEdges += Nsources;
+			perc = ((long double)VisitedEdges / (long double)E) * 100.0;
+			if(VisitedEdges != E){
+				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, E, perc);
 				Percentual[percCounter] = perc;
 				percCounter++;
 			}
 		#endif
 
+
 		/***    PRINT MATRIX    ***/
-		PrintMatrix<bool>(matrix, Nsources);
+		//PrintMatrix<bool>(matrix, Nsources);
+	    
 
-
-	    float msecTotal = 0.0f;
-	    float msecTotal1 = 0.0f;
-	    bool connect = false;
-
-
-	    /***    MATRIX VISIT ON HOST    ***/
-/*	    #if !BFS
+	    /***    MEMCOPY DEVICE_TO_HOST    ***/
+	    #if !BFS
 		    Timer<HOST> TM;
 		    TM.start();		    
+    	
+			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+
+	    	/***    MATRIX STCONN ON HOST    ***/
 			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
 			TM.stop();	    	
 		    msecTotal1 = TM.duration();
 	    #endif
-*/
-	    gpuErrchk( cudaEventRecord(start1, NULL) );
-		MatrixBFS1<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-	    			(DMatrix, Dvisited, 0, 1, Nsources);
 
-	    cudaDeviceSynchronize();
 
-	    gpuErrchk( cudaEventRecord(stop1, NULL) );
-	    gpuErrchk( cudaEventSynchronize(stop1) );
-	    //int result = 0;
-		gpuErrchk( cudaMemcpyFromSymbol(&connect, connected, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-
-		/***    CALCULATE ELAPSED TIME    ***/
+	    /***    CALCULATE ELAPSED TIME    ***/
 	    gpuErrchk( cudaEventElapsedTime(&msecTotal, start, stop) );
-	    gpuErrchk( cudaEventElapsedTime(&msecTotal1, start1, stop1) );
+
 	    
-	    #if (!BFS && DEBUG)
-			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm   \t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
+	    /***    PRINT RESULTS    ***/
+	    #if (!BFS)
+			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecTotal + msecTotal1, 27, 0);
 			if(!connect)
 				return;
 		#endif
+
+
+		/***    SAVE TIMES FOR STATISTICS EVALUATION    ***/
 		par_times[test] = msecTotal;
 		seq_times[test] = msecTotal1;
 		
@@ -196,7 +192,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	#endif
 
 	/***    EVALUATE MEAN PERCENTAGE    ***/
-	#if ATOMIC
+	#if (ATOMIC && DEBUG)
 		computeMeanPercentage(Percentual, percCounter);
 	#endif
 	
@@ -279,11 +275,6 @@ int main(int argc, char *argv[]){
     	 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
 		 << "--------------------------------------------------------" 	   << std::endl << std::endl;
 
-    /*if( graph.getMaxDegree() >= BLOCK_FRONTIER_LIMIT){
-    	std::cout << std::endl << "Graph max degree greater than FRONTIER_LIMIT" << std::endl;
-    	return 0;
-    } */
-
 	/***    LAUNCH ST-CONN FUNCTION    ***/
     if (all)
     {
@@ -295,9 +286,9 @@ int main(int argc, char *argv[]){
     }
     else if(Nsources != 0)
     {
-    	std::vector<double> prob = probability(N, Nsources, avgDeg);
-    	for (int i = 0; i < prob.size(); ++i)
-    		std::cout << "P(" << i << ") = " << std::right << std::setw(6) << prob[i] * 100 << "%" << std::endl;
+    	//std::vector<double> prob = probability(N, Nsources, avgDeg);
+    	//for (int i = 0; i < prob.size(); ++i)
+    	//	std::cout << "P(" << i << ") = " << std::right << std::setw(6) << prob[i] * 100 << "%" << std::endl;
     	printf("\nLaunch stConnectivity with %d sources\n\n", Nsources);
 		doSTCONN(graph, N, E, Nsources);
     }

@@ -4,7 +4,7 @@
 #define				     BFS	0
 #define				   DEBUG	1
 #define				   ATOMIC	1
-#define				  N_TEST 	1000
+#define				  N_TEST 	100
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
@@ -40,7 +40,7 @@ const int REG_QUEUE  = 	32;
 #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / Int_Size)
 
 #define cudaAssert(condition, pos) \
-  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); /*exitFlag = 1;*/ }
+  if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
 
 const int SOURCES[] = {10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
 const int LENGTH = sizeof(SOURCES) / sizeof(int);
