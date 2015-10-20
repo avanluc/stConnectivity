@@ -4,8 +4,12 @@
 #include "definition.cuh"
 
 __device__ unsigned int GSync[MAX_CONCURR_BL(BLOCK_SIZE)];
-__device__ bool devNextLevel[4];
 
+
+
+/*
+* Global Syncronization reset function
+*/
 __global__ void GReset() {
 	int bx = blockIdx.x;
     int tx = threadIdx.x;
@@ -14,8 +18,10 @@ __global__ void GReset() {
 		GSync[id] = 0;
 }
 
+
+
 /*
-*	Glocal Syncronization function
+*	Gloal Syncronization function
 */
 __device__  __forceinline__ void GlobalSync() {
 	volatile unsigned *VolatilePtr = GSync;

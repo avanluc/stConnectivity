@@ -4,6 +4,8 @@
 #include "definition.cuh"
 
 extern __shared__ unsigned char SMem[];
+__device__ int GlobalCounter = 0;
+__device__ int BottomUp_FrontSize = 0;
 
  /*
 * Assert for CUDA functions
@@ -66,7 +68,7 @@ __device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int found
 /*
 *
 */
-__device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int* Exit_Flag, int founds) {
+__device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Queue, int founds) {
 		
 	int n, total, globalOffset;
 	FrontierReserve_Block(Front_size, founds, n, total, globalOffset);
@@ -78,14 +80,41 @@ __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Qu
 		{
 			devFrontier[pos + i] = Queue[i];
 		}
-		else
-		{
-			#if(ATOMIC)
-				Exit_Flag[0] = 1;
-			#else
-				exitFlag = 1;
-			#endif
-		}
 	}
 }
+
+
+
+__device__ __forceinline__ void FrontierReserve(int founds, int& n, int &totalBlock){
+	int* SM = (int*) &SMem[TEMP_POS];
+	n = founds;
+	const int warpId = WarpID();
+	SM[warpId] = warpExclusiveScan<32>(n);
+	__syncthreads();
+	if (Tid < BLOCK_SIZE / 32)
+	{
+		int sum = SM[Tid];
+		const int total = warpExclusiveScan<BLOCK_SIZE / 32>(sum);
+
+		if (Tid == 0)
+			SM[32] = total;
+	}
+	__syncthreads();
+	totalBlock = SM[32];
+}
+
+
+
+/*
+*
+*/
+__device__ __forceinline__ void GlobalWrite(int founds, int* GlobalVar) {
+		
+	int n, total;
+	FrontierReserve(founds, n, total);
+
+	if(Tid==0)
+		atomicAdd(GlobalVar, total);
+}
+
 

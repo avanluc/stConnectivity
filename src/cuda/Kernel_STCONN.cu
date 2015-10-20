@@ -5,10 +5,16 @@
 #include "GlobalWrite.cu"
 
 
-__device__ int GlobalCounter = 0;
-__device__ int exitFlag = 0;
-__device__ int connected = 0;
-__device__ int GQueue[REG_QUEUE];
+/*
+* UPDATE BITMASK WITH NEW VISITED NODES
+*/
+__device__ __forceinline__ void UpdateBitMask(int* BitMask,	int* Frontier, const int FrontierSize)
+{
+	int limit = FrontierSize < BLOCK_FRONTIER_LIMIT ? FrontierSize : BLOCK_FRONTIER_LIMIT;
+	for (int t = Tid; t < limit; t += BLOCK_SIZE)
+		BitMask[Frontier[t]] = 1;
+}
+
 
 
 /*
@@ -19,42 +25,29 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 									const int* __restrict__ devSource,
 									int2* __restrict__ devDistance,
 									bool* __restrict__ Matrix,
-									const int Nsources) 
+									int*  __restrict__ BitMask, 
+									const int Nsources)
 {
 	int Queue[REG_QUEUE];
 	int FrontierSize = 1;
 	int level = 0;
-
-	#if(!ATOMIC)
-		exitFlag = 0;
-	#endif
-
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
-	int* Block_Exit = (int*) &SMem[EXIT_FLAG];
 
 	for(int j = Bid; j < Nsources; j += gridDim.x)
 	{
-		Block_Exit[0] = 0;
 		if (Tid < FrontierSize)
 			SMemF1[Tid] = devSource[j];
 	
 		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
 		{
-			if(!ATOMIC && exitFlag)
-				break;
-			if(Block_Exit[0]){
-				//printf("Block %d exit\n", Bid );
-				break;
-			}
-	
 			int founds = 0; int counter = 0;
 			for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE)
 			{
 				const int index = SMemF1[t];
 				const int start = devNode[index];
 				const int2 current = devDistance[index];
-				int end = devNode[index + 1];	
+				const int end = devNode[index + 1];	
 	
 				for (int k = start; k < end; k++)
 				{
@@ -69,6 +62,7 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 							if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
 								devDistance[dest].y = current.y;
 								Queue[founds++] = dest;
+								BitMask[dest] = 1;
 							}
 							else if (destination.y != current.y && destination.y < Nsources){	
 								Matrix[ (current.y     * Nsources) + destination.y ] = true;	
@@ -88,203 +82,97 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 					#endif
 				}
 			}
-			
-			Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
+
+			Write(SMemF1, &F2SizePtr[0], Queue, founds);
 	
 			level++;
 			FrontierSize = F2SizePtr[0];
 
 			#if ATOMIC
 				atomicAdd(&GlobalCounter, counter);
-				/*if (Tid == 0)
-					atomicAdd(&GlobalCounter, FrontierSize);*/
 			#endif
-	
+
 			__syncthreads();
 			F2SizePtr[0] = 0;
+			//UpdateBitMask(BitMask, SMemF1, FrontierSize);
 		}
-		level = 0;
-		FrontierSize = 1;
+		//UpdateBitMask(BitMask, SMemF1, FrontierSize);
+
+		level = 0; FrontierSize = 1;
 	}
+
 }
 
 
 
 /*
-* KERNEL FUNCTION FOR BFS
+* KERNEL FOR BOTTOM-UP VISIT
 */
-__global__ void BFS_BlockKernel (	const int* __restrict__ devNode,
+__global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
-									const int* __restrict__ devSource,
 									int2* __restrict__ devDistance,
-									bool* __restrict__ Matrix,
-									const int Nsources) 
+									int*  __restrict__ BitMask,
+									const int N)
 {
-	int Queue[REG_QUEUE];
 	int FrontierSize = 1;
-	int level = 0;
 
-	#if(!ATOMIC)
-		exitFlag = 0;
-	#endif
-
-	int* SMemF1 = (int*) &SMem[F1_OFFSET];
-	int* F2SizePtr = (int*) &SMem[F2Size_POS];
-	int* Block_Exit = (int*) &SMem[EXIT_FLAG];
-
-	for(int j = Bid; j < Nsources; j += gridDim.x)
+	while( FrontierSize )
 	{
-		Block_Exit[0] = 0;
-		if (Tid < FrontierSize)
-			SMemF1[Tid] = devSource[j];
-	
-		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
+		int founds = 0;
+		for (int index = GTid; index < N; index += MAX_CONCURR_TH)
 		{
-			if(!ATOMIC && exitFlag)
-				break;
-			if(Block_Exit[0]){
-				//printf("Block %d exit\n", Bid );
-				break;
-			}
-	
-			int founds = 0; int counter = 0;
-			for (int t = Tid; t < FrontierSize; t += BLOCK_SIZE)
+			if(devDistance[index].x == INT_MAX)
 			{
-				const int index = SMemF1[t];
 				const int start = devNode[index];
-				const int2 current = devDistance[index];
-				int end = devNode[index + 1];	
-	
+				const int end = devNode[index + 1];
 				for (int k = start; k < end; k++)
-				{
+				{	
 					const int dest = devEdge[k];
-					const int2 destination = devDistance[dest];	
-					
-					#if ATOMIC
-						if(founds < REG_QUEUE)
-						{
-							counter++;
-							if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
-								devDistance[dest].y = current.y;
-								Queue[founds++] = dest;
-							}
-						}
-					#else
-						if (destination.x == INT_MAX){	
-							devDistance[dest].x = level;
-							devDistance[dest].y = current.y;
-							Queue[founds++] = dest;
-						}
-					#endif
+					const int2 destination = devDistance[dest];
+
+					if(BitMask[dest] == 1)
+					{
+						devDistance[index].x = destination.x + 1;
+						devDistance[index].y = destination.y;
+						BitMask[index] = 1;
+						founds++;
+						break;
+					}
 				}
 			}
-			
-			Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
-	
-			level++;
-			FrontierSize = F2SizePtr[0];
-
-			#if ATOMIC
-				atomicAdd(&GlobalCounter, counter);
-				/*if (Tid == 0)
-					atomicAdd(&GlobalCounter, FrontierSize);*/
-			#endif
-	
-			__syncthreads();
-			F2SizePtr[0] = 0;
-		}
-		level = 0;
-		FrontierSize = 1;
-	}
-}
-
-
-
-/*
-* PARALLEL MATRIX BFS !!!DEPRECATED!!!
-*/
-__global__ void MatrixBFS1(	bool* __restrict__ Matrix,
-							int* __restrict__ Visited,
-							const int src,
-							const int dest,
-							const int Nsources)
-{
-	int  Queue[REG_QUEUE];
-	int  FrontierSize = 1;
-	int* SMemF1 	= (int*) &SMem[F1_OFFSET];
-	int* F2SizePtr 	= (int*) &SMem[F2Size_POS];
-	int* Block_Exit = (int*) &SMem[EXIT_FLAG];
-	int* SMemTemp 	= (int*) &SMem[TEMP_POS];
-	int founds = 0;
-
-
-	if(GTid < Nsources)
-	{
-
-		if(GTid == 0){
-			F2SizePtr[0] = 0;
-			Visited[src] = 1;		
-		}
-
-		/***    PRIMA FASE: VISITA SRC    ***/
-		if( Matrix[ src * Nsources + GTid ] )
-		{
-			//printf("GTID = %d\n", GTid);
-			Visited[GTid] = 1;
-			Queue[founds++] = GTid;
-		}
-
-		Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
-
-		__syncthreads();
-		FrontierSize = F2SizePtr[0];
-		//if(Tid == 0)
-			//printf("FrontierSize%d = %d, SMEM = %d, %d\n",Bid, FrontierSize, SMemF1[0], SMemF1[1] );
-		__syncthreads();
-		F2SizePtr[0] = 0;
-
-
-		/***    SECONDA FASE: VISITA MATRICE    ***/
-		while(FrontierSize)
-		{
-			founds = 0;
-
-			if(Tid < 34){
-				SMemTemp[Tid] = 0;
-				//printf("Warp %d = %d\n", Tid, SMemTemp[Tid]);
-			}
-
-
-			for (int i = 0; i < FrontierSize; ++i)
-			{
-				int qNode = SMemF1[i];
-					//if(Tid == 0)
-					//	printf("start visit from %d = %d\n", qNode, SMemF1[i] );
-					for (int j = Tid; j < Nsources; j+=BLOCK_SIZE)
-					{
-						if( Matrix[ qNode * Nsources + j ] && Visited[j] == 0)
-						{
-							//printf("\tThread %d aggiunge %d\n", Tid, j );
-							Visited[j] = 1;
-							Queue[founds++] = j;
-						}
-					}
-			}
-
-			Write(SMemF1, &F2SizePtr[0], Queue, Block_Exit, founds);
-			__syncthreads();
-			FrontierSize = F2SizePtr[0];
-			//if(Tid == 0)
-			//	printf("FrontierSize%d = %d\n",Bid, FrontierSize );
-			__syncthreads();
-			F2SizePtr[0] = 0;
 		}
 		
-		//__syncthreads();
+		GlobalWrite( founds, &BottomUp_FrontSize);
+		
+		GlobalSync();
+		FrontierSize = BottomUp_FrontSize;
 
-		if(Tid == 0)
-			connected = Visited[dest];
+		//atomicAdd(&GlobalCounter, founds);
+
+		GlobalSync();
+
+		BottomUp_FrontSize = 0;
 	}
+
+
+	/***    CHECK IF EVERY NODE IS VISITED    ***/
+	/*for (int index = GTid; index < N; index += MAX_CONCURR_TH)
+	{
+		if(devDistance[index].x == INT_MAX && BitMask[index] == 0)
+		{
+			printf("Node %d not visited\n", index);
+			const int start = devNode[index];
+			const int end = devNode[index + 1];
+			for (int k = start; k < end; k++)
+			{
+				printf("\t Vicino %d ha distance %d colore %d e mask %d\n", devEdge[k], devDistance[devEdge [k]].x, devDistance[devEdge [k]].y, BitMask[devEdge[k]]);
+				if(BitMask[devEdge[k]] == 1)
+					printf("\t NON DOVREBBE!!!\n");
+			}
+		}
+	}
+
+	if(GTid == 0)
+		printf("Total visited vertex = %d\n", GlobalCounter);*/
+
 }
-
-

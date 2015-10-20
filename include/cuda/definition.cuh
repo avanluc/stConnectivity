@@ -3,7 +3,8 @@
 /* DEBUG CONFIG */
 #define				     BFS	0
 #define				   DEBUG	1
-#define				   ATOMIC	1
+#define				  ATOMIC	1
+#define 		   BOTTOM_UP	1
 #define				  N_TEST 	100
 
 /* CUDA CONFIG */
@@ -30,11 +31,11 @@ const int REG_QUEUE  = 	32;
 #define  IntSMem_Per_BlockNum(BlockNum)		( SMem_Per_BlockNum(BlockNum) / Int_Size )
 
 #define				TEMP_POS 	0
-#define			END_TEMP_POS 	(TEMP_POS + (34 * Int_Size))
+#define			END_TEMP_POS 	(TEMP_POS + (35 * Int_Size))
 #define       	  F2Size_POS	END_TEMP_POS
 //#define			   F1_OFFSET	(F2Size_POS + (2 * Int_Size))
-#define			   EXIT_FLAG	(F2Size_POS + Int_Size)
-#define			   F1_OFFSET	(EXIT_FLAG + Int_Size)
+//#define			   EXIT_FLAG	(F2Size_POS + Int_Size)
+#define			   F1_OFFSET	(F2Size_POS + Int_Size)
 #define		   FRONTIER_SIZE 	((SMem_Per_Block(BLOCK_SIZE) - F1_OFFSET))
 #define			   F2_OFFSET	(F1_OFFSET + FRONTIER_SIZE)
 #define	BLOCK_FRONTIER_LIMIT 	(FRONTIER_SIZE / Int_Size)
