@@ -7,6 +7,8 @@ extern __shared__ unsigned char SMem[];
 __device__ int GlobalCounter = 0;
 __device__ int BottomUp_FrontSize = 0;
 
+
+
  /*
 * Assert for CUDA functions
 */
@@ -33,6 +35,7 @@ __device__ __forceinline__ void atomicStore(int2* address, int2 val){
     atomicCAS(addr_as_ull, assumed, *(unsigned long long*)&val);
     return;
 }
+
 
 
 /*
@@ -65,6 +68,7 @@ __device__ __forceinline__ void FrontierReserve_Block(int* Front_size, int found
 }
 
 
+
 /*
 *
 */
@@ -85,6 +89,9 @@ __device__ __forceinline__ void Write(int* devFrontier, int* Front_size, int* Qu
 
 
 
+/*
+* 
+*/
 __device__ __forceinline__ void FrontierReserve(int founds, int& n, int &totalBlock){
 	int* SM = (int*) &SMem[TEMP_POS];
 	n = founds;

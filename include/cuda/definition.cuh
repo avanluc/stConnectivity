@@ -2,10 +2,10 @@
 
 /* DEBUG CONFIG */
 #define				     BFS	0
-#define				   DEBUG	1
+#define				   DEBUG	0
 #define				  ATOMIC	1
 #define 		   BOTTOM_UP	1
-#define				  N_TEST 	100
+#define				  N_TEST 	25
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x

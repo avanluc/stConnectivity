@@ -57,7 +57,7 @@
 
 #if defined(__NVCC__)
 
-/*template<>
+template<>
 void Timer<DEVICE>::start() {
 	cudaEventRecord(startTimeCuda, 0);
 }
@@ -94,7 +94,7 @@ Timer<DEVICE>::Timer(int _P, int _W) : P(_P), W(_W) {
 	cudaEventCreate(&startTimeCuda);
 	cudaEventCreate(&stopTimeCuda);
 	//Timer<DEVICE>::start();
-}*/
+}
 
 
 //---------------------------------------------------------------------------------

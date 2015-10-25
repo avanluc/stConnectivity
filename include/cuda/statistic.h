@@ -14,7 +14,7 @@
 
 
 int EvaluateSourcesNum(float avgDeg, int N);
-void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_times, int connectCnt);
+void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_times, std::vector<double> BOT_times, int connectCnt);
 void computeMeanPercentage(std::vector<long double> Percentual, int percentCnt);
 double min(std::vector<long double> data, int n);
 double max(std::vector<long double> data, int n);

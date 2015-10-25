@@ -89,7 +89,8 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 			FrontierSize = F2SizePtr[0];
 
 			#if ATOMIC
-				atomicAdd(&GlobalCounter, counter);
+				//atomicAdd(&GlobalCounter, counter);
+				GlobalWrite(counter, &GlobalCounter);
 			#endif
 
 			__syncthreads();
@@ -136,6 +137,7 @@ __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 						devDistance[index].y = destination.y;
 						BitMask[index] = 1;
 						founds++;
+						//BottomUp_FrontSize = 1;
 						break;
 					}
 				}
@@ -146,33 +148,11 @@ __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 		
 		GlobalSync();
 		FrontierSize = BottomUp_FrontSize;
-
+		
 		//atomicAdd(&GlobalCounter, founds);
-
+		
 		GlobalSync();
-
+		
 		BottomUp_FrontSize = 0;
 	}
-
-
-	/***    CHECK IF EVERY NODE IS VISITED    ***/
-	/*for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-	{
-		if(devDistance[index].x == INT_MAX && BitMask[index] == 0)
-		{
-			printf("Node %d not visited\n", index);
-			const int start = devNode[index];
-			const int end = devNode[index + 1];
-			for (int k = start; k < end; k++)
-			{
-				printf("\t Vicino %d ha distance %d colore %d e mask %d\n", devEdge[k], devDistance[devEdge [k]].x, devDistance[devEdge [k]].y, BitMask[devEdge[k]]);
-				if(BitMask[devEdge[k]] == 1)
-					printf("\t NON DOVREBBE!!!\n");
-			}
-		}
-	}
-
-	if(GTid == 0)
-		printf("Total visited vertex = %d\n", GlobalCounter);*/
-
 }

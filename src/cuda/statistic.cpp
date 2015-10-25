@@ -52,18 +52,21 @@ void computeMeanPercentage(std::vector<long double> Percentual, int percentCnt){
 /*
 * Evaluate Elapsed Time
 */
-void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_times, int connectCnt){
+void computeElapsedTime(std::vector<double> par_times, std::vector<double> seq_times, std::vector<double> BOT_times, int connectCnt){
 	double sum_par = 0;
 	double sum_seq = 0;
+	double sum_bot = 0;
 
 	for (int i = 1; i < N_TEST; ++i){
 		sum_par += par_times[i];
 		sum_seq += seq_times[i];
+		sum_bot += BOT_times[i];
 	}
 
 	printf("\n# Positive Responses: %d on %d\n", (N_TEST - connectCnt), N_TEST);
-	printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq) / (N_TEST-1), 27, 0);
-	printf("AVG PARALLEL TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
+	printf("AVG TIME \t\t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_par + sum_seq + sum_bot) / (N_TEST-1), 27, 0);
+	printf("AVG TOP-DOWN TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_par / (N_TEST-1), 27, 0);
+	printf("AVG BOTTOM-UP TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_bot / (N_TEST-1), 27, 0);
 	printf("AVG MATRIX BFS TIME \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, sum_seq / (N_TEST-1), 27, 0);
 }
 
