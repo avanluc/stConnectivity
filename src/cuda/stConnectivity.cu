@@ -8,13 +8,14 @@
 void doSTCONN(Graph graph, int N, int E, int Nsources){
 	
 	/***    CALCULATE SIZES    ***/
+	int BMint = ceil((double)N / (8 * sizeof(int)));
+	BMint += 4 - (BMint % 4);
 	size_t sizeE 	  = E * sizeof(int);
 	size_t sizeN 	  = N * sizeof(int2);
 	size_t sizeN1 	  = (N+1) * sizeof(int);
 	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
-	size_t sizeBMask  = N * sizeof(int);
-
+	size_t sizeBMask = BMint * sizeof(int);
 	
 
 	/***    ALLOCATE HOST MEMORY    ***/
@@ -98,6 +99,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 		/***    LAUNCH RESET KERNEL    ***/
 		GReset<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>();
+		initBitMask<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>(DBitMask, N, sizeBMask*128);
 
 
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
@@ -116,11 +118,11 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 			if(BOTTOM_UP && VisitedEdges != E && perc > 50.0 )
 			{
-				TM_BU.start();
+				/*TM_BU.start();
 				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
 			    			(Dvertex, Dedges, Ddistance, DBitMask, N);
 			    TM_BU.stop();
-			    msecBOT = TM_BU.duration();
+			    msecBOT = TM_BU.duration();*/
 			}
 			else if(VisitedEdges != E)
 			{

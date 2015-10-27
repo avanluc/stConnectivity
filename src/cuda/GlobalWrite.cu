@@ -119,7 +119,7 @@ __device__ __forceinline__ void GlobalWrite(int founds, int* GlobalVar) {
 		
 	int n, total;
 	FrontierReserve(founds, n, total);
-
+	
 	if(Tid==0)
 		atomicAdd(GlobalVar, total);
 }
