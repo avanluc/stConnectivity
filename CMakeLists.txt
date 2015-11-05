@@ -79,7 +79,7 @@ if (    (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
 	AND (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
 	AND (NOT CMAKE_BUILD_TYPE STREQUAL "DebugLine")
 	AND (NOT CMAKE_BUILD_TYPE STREQUAL "Info"))
-	message(FATAL_ERROR "\nwrong BUILD_TYPE: \"-D CMAKE_BUILD_TYPE=[ Release | Debug | Info | (void) ]\"")
+	message(FATAL_ERROR "\nwrong BUILD_TYPE: \"-D CMAKE_BUILD_TYPE=[ Release | Debug | Info | DebugLine ]\"")
 endif()
 
 #debug options
@@ -87,7 +87,7 @@ set(CUDA_NVCC_FLAGS_DEBUG "-g" "-G")	# "--ptxas-options=-v"
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall")
 
 #debugline
-list(APPEND CUDA_NVCC_FLAGS_DEBUGLINE "-g" "-lineinfo")
+list(APPEND CUDA_NVCC_FLAGS_DEBUGLINE "-g" "-G" "-lineinfo")
 set(CMAKE_CXX_FLAGS_DEBUGLINE "-g -Wall")
 
 #info

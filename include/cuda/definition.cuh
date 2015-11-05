@@ -2,9 +2,10 @@
 
 /* DEBUG CONFIG */
 #define				     BFS	0
-#define				   DEBUG	0
+#define				   DEBUG	1
 #define				  ATOMIC	1
 #define 		   BOTTOM_UP	1
+#define				TRESHOLD 	0.3
 #define				  N_TEST 	25
 
 /* CUDA CONFIG */
@@ -43,5 +44,5 @@ const int REG_QUEUE  = 	32;
 #define cudaAssert(condition, pos) \
   if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
 
-const int SOURCES[] = {10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
+const int SOURCES[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
 const int LENGTH = sizeof(SOURCES) / sizeof(int);

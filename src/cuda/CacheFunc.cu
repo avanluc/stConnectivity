@@ -1,27 +1,42 @@
 #pragma once
 #include <cub.cuh>
 
+
 template<cub::CacheLoadModifier LDD, typename T>
-__device__ __forceinline__  bool markAccess(T* devArray, const int index) {
-    return cub::ThreadLoad<LDD>(reinterpret_cast<char*>(devArray) + (index >> 3)) & (1 << (index & 7));
+__device__ __forceinline__ bool markAccess(T* devArray, const int index) {
+	return cub::ThreadLoad<LDD>(reinterpret_cast< char*>(devArray) + (index >> 3)) & (1 << (8 - (index & 7)));
 }
 
-/*
-* (1 << (index & 7)) = 2^index a 8 bit
-*/
+
+
 template<cub::CacheLoadModifier LDD, cub::CacheStoreModifier STD, typename T>
 __device__ __forceinline__  void markWrite(T* devArray, const int index) {
-    //const char* address = reinterpret_cast< char*>(devArray) + (index >> 3);
-    const char value = cub::ThreadLoad<LDD>(reinterpret_cast< char*>(devArray) + (index >> 3)) | (1 << (index & 7));
-    cub::ThreadStore<STD>(reinterpret_cast< char*>(devArray) + (index >> 3), value);
+    char* address = reinterpret_cast< char*>(devArray) + (index >> 3);
+    const char value = cub::ThreadLoad<LDD>(address) | (1 << (8 - (index & 7)));
+    cub::ThreadStore<STD>(address, value);
 }
 
 
-/*
-int* devArray = InputArray + Tid * Bid * 8 + Tid * 4;
-int Queue[8];
 
-reinterpret_cast<int4*>(Queue)[0] = reinterpret_cast<int4*>( devArray )[0];
-reinterpret_cast<int4*>(Queue)[4] = __ldg(&reinterpret_cast<int4*>( devArray )[BLOCKDIM]);
+__device__ __forceinline__  bool getBit(int* devArray, const int index) {
+    int value = reinterpret_cast<int*>(devArray)[index >> 5];
+    return value & (1 << (index & 31));
+}
 
-*/
+
+
+__device__ __forceinline__  void setBit(int* devArray, const int index) {
+    int value = reinterpret_cast<int*>(devArray)[index >> 5];
+    devArray[index >> 5] =  value | (1 << (index & 31));
+}
+
+
+__device__ __forceinline__ bool visitAdjiacent(int index, const int* devNode, const int* devEdge, int* BitMask, const int N)
+{
+	const int start = devNode[index];
+	const int end = devNode[index + 1];
+	for (int k = start; k < end; ++k)	
+		if(markAccess<cub::LOAD_CS>(BitMask, devEdge[k]))
+			return 1;
+	return 0;
+}

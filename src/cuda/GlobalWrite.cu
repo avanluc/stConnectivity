@@ -4,6 +4,7 @@
 #include "definition.cuh"
 
 extern __shared__ unsigned char SMem[];
+__device__ int VisitResult = 0;
 __device__ int GlobalCounter = 0;
 __device__ int BottomUp_FrontSize = 0;
 

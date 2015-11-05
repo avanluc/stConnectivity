@@ -1,4 +1,4 @@
-#pragma once
+//#pragma once
 
 #include "Kernel_STCONN.cu"
 #include "stConn.h"
@@ -9,13 +9,13 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	
 	/***    CALCULATE SIZES    ***/
 	int BMint = ceil((double)N / (8 * sizeof(int)));
-	BMint += 4 - (BMint % 4);
+	BMint += 16 * BLOCK_SIZE;
 	size_t sizeE 	  = E * sizeof(int);
 	size_t sizeN 	  = N * sizeof(int2);
 	size_t sizeN1 	  = (N+1) * sizeof(int);
 	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
-	size_t sizeBMask = BMint * sizeof(int);
+	size_t sizeBMask  = BMint * sizeof(int);
 	
 
 	/***    ALLOCATE HOST MEMORY    ***/
@@ -97,36 +97,66 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	    bool  connect = false;
 
 
-		/***    LAUNCH RESET KERNEL    ***/
 		GReset<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>();
-		initBitMask<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>(DBitMask, N, sizeBMask*128);
+		initBitMask<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>(DBitMask, N, BMint);
 
 
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
 		TM_TD.start();
 		STCONN_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources);
+	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources, E);
 	    TM_TD.stop();
 	    msecPAR = TM_TD.duration();
 
 
-	    /***    CHECK VISIT PERCENTAGE    ***/
 	    #if(ATOMIC)
 
+	    	/***    CHECK VISIT PERCENTAGE    ***/
 			gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 			perc = ((long double)VisitedEdges / (long double)E) * 100.0;
 
-			if(BOTTOM_UP && VisitedEdges != E && perc > 50.0 )
+
+
+
+			if(BOTTOM_UP && perc > TRESHOLD*100 )
 			{
-				/*TM_BU.start();
-				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-			    			(Dvertex, Dedges, Ddistance, DBitMask, N);
+	    		/***    LAUNCH BOTTOM-UP KERNEL    ***/
+				int Limit = ceil((double)N / (8 * sizeof(int)));
+				int FrontierSize = 1;
+				int level = 0;
+				int zero = 0;
+				int result = 0;
+				//printf("Int in BM = %d\n", Limit);
+				//printf("MAX dim BM = %d\n", BMint);
+				
+				TM_BU.start();
+
+				while( FrontierSize )
+				{
+				    gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+
+					Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+				    			(Dvertex, Dedges, Ddistance, DBitMask, N, Limit);
+
+				    gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+				    //printf("Level %d FrontierSize %d\n", level++, FrontierSize);
+			    }
+
 			    TM_BU.stop();
-			    msecBOT = TM_BU.duration();*/
+				msecBOT = TM_BU.duration();
+
+
+
+	    		/***    CHECK NODES    ***/
+				gpuErrchk( cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+			    CheckVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(DBitMask, Limit, N);
+			    gpuErrchk( cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			    if(result != 0)
+			    	printf("!!! There are %d nodes not visited !!!\n", result);
 			}
-			else if(VisitedEdges != E)
+			else
 			{
-				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, E, perc);
+				 printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, E, perc);
 				Percentual[percCounter++] = perc;
 			}
 		#endif
@@ -154,8 +184,6 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecPAR + msecSEQ + msecBOT, 27, 0);
-			if(!connect)
-				return;
 		#endif
 
 
@@ -275,12 +303,5 @@ int main(int argc, char *argv[]){
 			doSTCONN(graph, N, E, SOURCES[i]);
 		}
     }
-    /*else
-    {
-    	printf("Evaluating appropriate sources number\n");
-    	Nsources = EvaluateSourcesNum(avgDeg, N);
-    	printf("Launch stConnectivity with %d sources\n\n", Nsources);
-		doSTCONN(graph, N, E, Nsources);
-    }*/
 	return 0;
 }

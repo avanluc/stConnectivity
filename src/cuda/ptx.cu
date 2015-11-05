@@ -1,4 +1,4 @@
-#pragma once
+//#pragma once
 #include <cub.cuh>
 #include "definition.cuh"
 // ----------- THREAD PTX -------------------
