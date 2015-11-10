@@ -87,7 +87,7 @@ set(CUDA_NVCC_FLAGS_DEBUG "-g" "-G")	# "--ptxas-options=-v"
 set(CMAKE_CXX_FLAGS_DEBUG "-g -Wall")
 
 #debugline
-list(APPEND CUDA_NVCC_FLAGS_DEBUGLINE "-g" "-G" "-lineinfo")
+list(APPEND CUDA_NVCC_FLAGS_DEBUGLINE "-g" "-G" "-lineinfo" "-keep")
 set(CMAKE_CXX_FLAGS_DEBUGLINE "-g -Wall")
 
 #info

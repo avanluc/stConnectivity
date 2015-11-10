@@ -5,8 +5,8 @@
 #define				   DEBUG	1
 #define				  ATOMIC	1
 #define 		   BOTTOM_UP	1
-#define				TRESHOLD 	0.3
-#define				  N_TEST 	25
+#define				TRESHOLD 	0.5
+#define				  N_TEST 	1
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
