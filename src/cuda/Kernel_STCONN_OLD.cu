@@ -5,14 +5,32 @@
 #include "GlobalWrite.cu"
 
 
-/*
-* UPDATE BITMASK WITH NEW VISITED NODES
-*/
-__device__ __forceinline__ void UpdateBitMask(int* BitMask,	int* Frontier, const int FrontierSize)
+
+__global__ void CheckVisit(	bool* __restrict__ BitMask,
+							const int N)
 {
-	int limit = FrontierSize < BLOCK_FRONTIER_LIMIT ? FrontierSize : BLOCK_FRONTIER_LIMIT;
-	for (int t = Tid; t < limit; t += BLOCK_SIZE)
-		BitMask[Frontier[t]] = 1;
+	int founds = 0;
+	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
+		if(BitMask[index] == 0)
+			founds++;
+	atomicAdd(&VisitResult, founds);
+}
+
+
+
+__device__ __forceinline__ int visit(	const int* __restrict__ devNode,
+										const int* __restrict__ devEdge,
+										bool* __restrict__ BitMask,
+										const int index)
+{
+	const int start = devNode[index];
+	const int end = devNode[index + 1];
+	for (int k = start; k < end; k++){
+		if(BitMask[devEdge[k]] == 1){
+			return 1;
+		}
+	}
+	return 0;
 }
 
 
@@ -25,7 +43,7 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 									const int* __restrict__ devSource,
 									int2* __restrict__ devDistance,
 									bool* __restrict__ Matrix,
-									int*  __restrict__ BitMask, 
+									bool*  __restrict__ BitMask, 
 									const int Nsources,
 									const int E)
 {
@@ -37,8 +55,10 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 
 	for(int j = Bid; j < Nsources; j += gridDim.x)
 	{
-		if (Tid < FrontierSize)
+		if (Tid < FrontierSize){
 			SMemF1[Tid] = devSource[j];
+			BitMask[SMemF1[Tid]] = 1;
+		}
 	
 		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
 		{
@@ -54,33 +74,20 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 				{
 					const int dest = devEdge[k];
 					const int2 destination = devDistance[dest];	
-	
-					#if ATOMIC
 						
-						if(founds < REG_QUEUE)
-						{
-							counter++;
-							if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
-								devDistance[dest].y = current.y;
-								Queue[founds++] = dest;
-								BitMask[dest] = 1;
-							}
-							else if (destination.y != current.y && destination.y < Nsources){	
-								Matrix[ (current.y     * Nsources) + destination.y ] = true;	
-								Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
-							}
-						}
-					#else
-						if (destination.x == INT_MAX) {	
-							devDistance[dest].x = level;
+					if(founds < REG_QUEUE)
+					{
+						counter++;
+						if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
 							devDistance[dest].y = current.y;
 							Queue[founds++] = dest;
+							BitMask[dest] = 1;
 						}
 						else if (destination.y != current.y && destination.y < Nsources){	
 							Matrix[ (current.y     * Nsources) + destination.y ] = true;	
 							Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
 						}
-					#endif
+					}
 				}
 			}
 
@@ -89,19 +96,16 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 			level++;
 			FrontierSize = F2SizePtr[0];
 
-			#if ATOMIC
-				GlobalWrite(counter, &GlobalCounter);
-			#endif
+			GlobalWrite(counter, &GlobalCounter);
 
 			__syncthreads();
 			F2SizePtr[0] = 0;
 
-			if((double)GlobalCounter / (double)E > TRESHOLD)
+			if(__int2double_rn(GlobalCounter) / __int2double_rn(E) > TRESHOLD)
 				return;
 		}
 		level = 0; FrontierSize = 1;
 	}
-
 }
 
 
@@ -111,34 +115,15 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 */
 __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
-									int2* __restrict__ devDistance,
-									int*  __restrict__ BitMask,
+									bool*  __restrict__ BitMask,
 									const int N)
 {
-
 	int founds = 0;
 	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-	{
-		if(devDistance[index].x == INT_MAX)
+		if(BitMask[index] == 0 && visit(devNode, devEdge, BitMask, index))
 		{
-			const int start = devNode[index];
-			const int end = devNode[index + 1];
-			for (int k = start; k < end; k++)
-			{	
-				const int dest = devEdge[k];
-				const int2 destination = devDistance[dest];
-
-				if(BitMask[dest] == 1)
-				{
-					devDistance[index].x = destination.x + 1;
-					devDistance[index].y = destination.y;
-					BitMask[index] = 1;
-					founds++;
-					break;
-				}
-			}
+			BitMask[index] = 1;
+			founds++;
 		}
-	}
-	
 	GlobalWrite( founds, &BottomUp_FrontSize);
 }

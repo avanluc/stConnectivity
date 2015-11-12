@@ -13,7 +13,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	size_t sizeN1 	  = (N+1) * sizeof(int);
 	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
-	size_t sizeBMask  = N * sizeof(int);
+	size_t sizeBMask  = N * sizeof(bool);
+
+	printf("int : %d \nbool: %d\n", sizeof(int), sizeof(bool));
 
 	
 
@@ -29,7 +31,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	int *Dvertex;
 	int *Dsources;
 	int *Dvisited;
-	int *DBitMask;
+	bool *DBitMask;
 	int2 *Ddistance;
 	bool *DMatrix;
 
@@ -97,7 +99,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 		/***    LAUNCH RESET KERNEL    ***/
-		GReset<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>();
+		//GReset<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>();
 
 
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
@@ -109,39 +111,48 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	    /***    CHECK VISIT PERCENTAGE    ***/
-	    #if(ATOMIC)
+		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
+		
 
-			gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-			perc = ((long double)VisitedEdges / (long double)E) * 100.0;
+		if(BOTTOM_UP && perc > TRESHOLD*100 )
+		{
+
+			int FrontierSize = 1;
+			int FrontierSize1 = 0;
+			int zero = 0;
+			int level = 0;
+			int result = 0;
+			int* BM = (int*)calloc(N, sizeof(int));
+
+			TM_BU.start();
+			while( FrontierSize )
+			{
+			    //gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+			    gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+			    				(Dvertex, Dedges, DBitMask, N);
+			    gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			    //gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			   	//printf("Level %d FrontierSize %d  \tremaining %d\n", level++, FrontierSize, FrontierSize1);
+		    }
+		    TM_BU.stop();
+		    msecBOT = TM_BU.duration();
+
+
+
+			cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
+			CheckVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(DBitMask, N);
+			cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost);
+			if(result != 0)
+				printf("\t!!! There are %d nodes not visited !!!\n", result);
 			
-
-			if(BOTTOM_UP && perc > TRESHOLD*100 )
-			{
-				int FrontierSize = 1;
-				int zero = 0;
-
-				TM_BU.start();
-				while( FrontierSize )
-				{
-				    gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-
-					Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-				    			(Dvertex, Dedges, Ddistance, DBitMask, N);
-
-				    gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-				    //printf("Level %d FrontierSize %d\n", level++, FrontierSize);
-			    }
-			    TM_BU.stop();
-			    msecBOT = TM_BU.duration();
-				
-			}
-			else
-			{
-				printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, E, perc);
-				Percentual[percCounter++] = perc;
-			}
-		#endif
-
+		}
+		else
+		{
+			printf("---------------WARNING: TRESHOLD NOT REACHED---------------\t\t %d on %d\t%.2Lf%%\n", VisitedEdges, E, perc);
+			Percentual[percCounter++] = perc;
+		}
 
 
 		/***    PRINT MATRIX    ***/
@@ -183,20 +194,14 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		//if( !connect )
 		//	connectCnt++;
 
-	    if( ATOMIC && perc < 100 )
+	    if( perc < 100 )
 			unfinishedCnt++;
 	}
 	
 
-	/***    EVALUATE MEAN TIMES    ***/
-	#if(N_TEST > 1)
-		computeElapsedTime( par_times, seq_times, BOT_times, connectCnt);
-	#endif
-
-	/***    EVALUATE MEAN PERCENTAGE    ***/
-	#if (ATOMIC && DEBUG)
-		computeMeanPercentage(Percentual, percCounter);
-	#endif
+	/***    EVALUATE MEAN TIMES AND PERCENTAGE    ***/
+	computeElapsedTime( par_times, seq_times, BOT_times, connectCnt);
+	computeMeanPercentage(Percentual, percCounter);
 	
 	/***    FREE DEVICE MEMORY    ***/
     cudaFree(Ddistance);
@@ -280,14 +285,14 @@ int main(int argc, char *argv[]){
 	/***    LAUNCH ST-CONN FUNCTION    ***/
     if(Nsources != 0)
     {
-    	printf("\nLaunch stConnectivity with %d sources\n\n", Nsources);
-		doSTCONN(graph, N, E, Nsources);
+    	printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", Nsources, TRESHOLD*100);
+    	doSTCONN(graph, N, E, Nsources);
     }
     else
     {
 		for (int i = 0; i < LENGTH; ++i)
 		{
-			printf("\n----------Launch stConnectivity with %d sources----------\n\n", SOURCES[i]);
+			printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", SOURCES[i], TRESHOLD*100);
 			doSTCONN(graph, N, E, SOURCES[i]);
 		}
     }

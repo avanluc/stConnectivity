@@ -34,20 +34,20 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	int2 *Ddistance;
 	bool *DMatrix;
 
-	cudaMalloc((void **) &Dvertex, 	sizeN1);
+	/*cudaMalloc((void **) &Dvertex, 	sizeN1);
 	cudaMalloc((void **) &Dedges, 	sizeE);
 	cudaMalloc((void **) &DMatrix, 	sizeMatrix);
 	cudaMalloc((void **) &Ddistance, sizeN);
 	cudaMalloc((void **) &Dsources, 	sizeSrcs);
 	cudaMalloc((void **) &Dvisited, 	sizeSrcs);
-	cudaMalloc((void **) &DBitMask, 	sizeBMask);
-	/*gpuErrchk( cudaMalloc((void **) &Dvertex, 	sizeN1) );
+	cudaMalloc((void **) &DBitMask, 	sizeBMask);*/
+	gpuErrchk( cudaMalloc((void **) &Dvertex, 	sizeN1) );
 	gpuErrchk( cudaMalloc((void **) &Dedges, 	sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
 	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeSrcs) );
 	gpuErrchk( cudaMalloc((void **) &Dvisited, 	sizeSrcs) );
-	gpuErrchk( cudaMalloc((void **) &DBitMask, 	sizeBMask) );*/
+	gpuErrchk( cudaMalloc((void **) &DBitMask, 	sizeBMask) );
 
 
 	/***    SERVICE VARIABLES    ***/
@@ -67,8 +67,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 		/***    CHOOSE RANDOM SOURCE, DEST AND EXTRA-SOURCES    ***/
 		int VisitedEdges = 0;
-		int source = 2021938 /*rand() % N*/;
-		int target = 2530630 /*rand() % N*/;
+		int source = rand() % N;
+		int target = rand() % N;
 		while(target == source)		target = rand() % N;
 
 		ChooseRandomNodes(sources, N, Nsources, source, target);
@@ -83,22 +83,22 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 		/***    MEMCOPY HOST_TO_DEVICE    ***/
-	cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice);
+	/*cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice);
 	cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice);
 	cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice);
 	cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice);
 	cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice);		
 	cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int));
 	cudaMemset(Dvisited, 0, sizeSrcs);
-	cudaMemset(DBitMask, 0, sizeBMask);
-	/*gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
+	cudaMemset(DBitMask, 0, sizeBMask);*/
+	gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
 	gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
 	gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
 	gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
 	gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 	gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int)) );
 	gpuErrchk( cudaMemset(Dvisited, 0, sizeSrcs) );
-	gpuErrchk( cudaMemset(DBitMask, 0, sizeBMask) );*/
+	gpuErrchk( cudaMemset(DBitMask, 0, sizeBMask) );
 
 		
 		/***    INITIALIZE TIMERS    ***/
@@ -121,63 +121,62 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 					(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources, E);
 		TM_TD.stop();
 
+		
 
-		#if(ATOMIC)
-				int FrontierSize = 1;
-				int FrontierSize1 = 1;
-				int level = 0;
-				int zero = 0;
-				int result = 0;
-
-			/***    CHECK VISIT PERCENTAGE    ***/
-			//gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost);
-			cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost);
-			perc = ((long double)VisitedEdges / (long double)E) * 100.0;
+		/***    CHECK VISIT PERCENTAGE    ***/
+		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		//cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost);
+		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
 
 
 
-			if(BOTTOM_UP && perc > TRESHOLD*100 )
+		if(BOTTOM_UP && perc > TRESHOLD*100 )
+		{
+			int FrontierSize = 1;
+			int FrontierSize1 = 1;
+			int level = 0;
+			int zero = 0;
+			int result = 0;
+
+			/***    LAUNCH BOTTOM-UP KERNEL    ***/
+			TM_BU.start();
+
+			while( FrontierSize )
 			{
-				/***    LAUNCH BOTTOM-UP KERNEL    ***/
-				TM_BU.start();
+				//gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+				gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+				//cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
+				//cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
 
-				while( FrontierSize )
-				{
-					//gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-					//gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-					cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
-					cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
+				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+								(Dvertex, Dedges, DBitMask, Limit, N);
 
-					Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-									(Dvertex, Dedges, DBitMask, Limit, N);
-
-					//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-					//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-					cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost);
-					cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost);
-					printf("\tLevel %d FrontierSize %d\t remaining %d\n", level++, FrontierSize, FrontierSize1);
-				}
-
-				TM_BU.stop();
-
-
-
-				/***    CHECK NODES    ***/
-				//gpuErrchk( cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-				cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
-				CheckVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, DBitMask, Limit, N);
-				//gpuErrchk( cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-				cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost);
-				if(result != 0)
-					printf("\t!!! There are %d nodes not visited !!!\n", result);
-
+				//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+				gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+				//cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost);
+				//cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost);
+				//printf("\tLevel %d FrontierSize %d  \tremaining %d\n", level++, FrontierSize, FrontierSize1);
 			}
-			else
-			{
-				 printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%\n", VisitedEdges, E, perc);
-				Percentual[percCounter++] = perc;
-			}
-		#endif
+
+			TM_BU.stop();
+
+
+
+			/***    CHECK NODES    ***/
+			gpuErrchk( cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+			//cudaMemcpyToSymbol(VisitResult, &zero, sizeof(int), 0, cudaMemcpyHostToDevice);
+			CheckVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(Dvertex, Dedges, DBitMask, Limit, N);
+			gpuErrchk( cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+			//cudaMemcpyFromSymbol(&result, VisitResult, sizeof(int), 0, cudaMemcpyDeviceToHost);
+			if(result != 0)
+				printf("\t!!! There are %d nodes not visited !!!\n", result);
+
+		}
+		else
+		{
+			 printf("---------------WARNING: BFS NOT COMPLETE---------------\t\t %d on %d\t%.2Lf%%\n", VisitedEdges, E, perc);
+			Percentual[percCounter++] = perc;
+		}
 
 
 
@@ -189,8 +188,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		#if !BFS
 			TM.start();
 
-			//gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-			cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost);
+			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+			//cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost);
 			connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
 
 			TM.stop();
@@ -203,13 +202,13 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 		/***    PRINT RESULTS    ***/
 		#if (!BFS)
-			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n\n", 
+			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecPAR + msecSEQ + msecBOT, 27, 0);
 		#endif
 
 		if(!connect)
-		connectCnt++;	
+			connectCnt++;	
 
 
 		/***    SAVE TIMES FOR STATISTICS EVALUATION    ***/
@@ -219,15 +218,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	}
 	
 
-	/***    EVALUATE MEAN TIMES    ***/
-	#if(N_TEST > 1)
+	/***    EVALUATE MEAN TIMES AND PERCENTAGE    ***/
 		computeElapsedTime( par_times, seq_times, BOT_times, connectCnt);
-	#endif
-
-	/***    EVALUATE MEAN PERCENTAGE    ***/
-	#if (ATOMIC && DEBUG)
 		computeMeanPercentage(Percentual, percCounter);
-	#endif
 	
 	/***    FREE DEVICE MEMORY    ***/
 	cudaFree(Ddistance);
