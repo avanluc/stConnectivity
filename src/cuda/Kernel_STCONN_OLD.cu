@@ -3,6 +3,7 @@
 #include <assert.h>
 #include "GlobalSync.cu"
 #include "GlobalWrite.cu"
+#include "CacheFunc.cu"
 
 
 
@@ -116,11 +117,62 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
 									bool*  __restrict__ BitMask,
+									const int BMsize,
 									const int N)
 {
+
+	/*const int stride = gridDim.x * BLOCK_SIZE * 8;
+	bool *BitMarkArray = BitMask + Tid * 4;
+	int founds  = 0;
+	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < N; BlockIndex += stride)
+	{
+		bool Queue[8];
+ 
+		reinterpret_cast<int*>(Queue)[0] = reinterpret_cast<int*>(BitMask + BlockIndex)[Tid];
+		reinterpret_cast<int*>(Queue)[1] = __ldg( &reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] );
+		
+		Queue[0] = BitMask[BlockIndex + (Tid * 4) + 0];
+		Queue[1] = BitMask[BlockIndex + (Tid * 4) + 1];
+		Queue[2] = BitMask[BlockIndex + (Tid * 4) + 2];
+		Queue[3] = BitMask[BlockIndex + (Tid * 4) + 3];
+		Queue[4] = BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 0];
+		Queue[5] = BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 1];
+		Queue[6] = BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 2];
+		Queue[7] = BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 3];
+
+		#pragma unroll
+		for (int i = 0; i < 8; i++){
+			const int ldg_stride = i >= 4 ? BLOCK_SIZE * 4 : 0;
+			const int index = BlockIndex + (Tid * 4) + ldg_stride + i%4;
+			if (Queue[i] == 0 && index < N && visitAdjiacent(index, devNode, devEdge, BitMask))
+			{
+				Queue[i] = 1;
+				founds++;
+			}
+		}
+
+		BitMask[BlockIndex + (Tid * 4) + 0] = Queue[0];
+		BitMask[BlockIndex + (Tid * 4) + 1] = Queue[1];
+		BitMask[BlockIndex + (Tid * 4) + 2] = Queue[2];
+		BitMask[BlockIndex + (Tid * 4) + 3] = Queue[3];
+		BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 0] = Queue[4];
+		BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 1] = Queue[5];
+		BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 2] = Queue[6];
+		BitMask[BlockIndex + (Tid * 4) + (BLOCK_SIZE * 4) + 3] = Queue[7];
+
+		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid] = reinterpret_cast<int*>(Queue)[0];
+		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] = reinterpret_cast<int*>(Queue)[1];
+		
+		BitMarkArray += stride;
+	}
+	GlobalWrite( founds, &BottomUp_FrontSize);*/
+
+
+
+
 	int founds = 0;
 	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-		if(BitMask[index] == 0 && visit(devNode, devEdge, BitMask, index))
+		if(BitMask[index] == 0 && visitAdjiacent(devNode, devEdge, BitMask, index))
 		{
 			BitMask[index] = 1;
 			founds++;

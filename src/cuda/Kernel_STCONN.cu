@@ -18,41 +18,11 @@ __global__ void CheckVisit(	const int* __restrict__ devNode,
 {
 	int founds = 0;
 	for (int i = GTid; i < N; i+=MAX_CONCURR_TH)
-		if(markAccessInt<cub::LOAD_CS, int>(BitMask, i) == 0 /*&& visitAdjiacent(i, devNode, devEdge, BitMask)*/){
+		if(markAccess<cub::LOAD_CS, int>(BitMask, i) == 0 ){
 			founds++;
 	}
 
 	atomicAdd(&VisitResult, founds);
-
-	/*const int stride = gridDim.x * BLOCK_SIZE * 8;
-	int* BitMarkArray = BitMask + Tid * 4;
-	int founds  = 0;
-	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < BMsize; BlockIndex += stride)
-	{
-		int Queue[8];
-
-		reinterpret_cast<uint4*>(Queue)[0] = reinterpret_cast<uint4*>(BitMarkArray + BlockIndex)[0];
-		reinterpret_cast<uint4*>(Queue)[1] = __ldg( &reinterpret_cast<uint4*>(BitMarkArray + BlockIndex)[BLOCK_SIZE] );
-
-		#pragma unroll
-		for (int i = 0; i < 8; i++){
-			#pragma unroll
-			for (int j = 0; j < 32; j++){
-				
-				const int ldg_stride = i >= 4 ? BLOCK_SIZE * 128 : 0;
-				const int index = (BlockIndex * 32) + (Tid * 128) + ldg_stride + (i%4 * 32) + j;
-				if ( (Queue[i] & (1 << (31 - j))) == 0 && visitAdjiacent(index, devNode, devEdge, BitMask)){
-					founds++;
-				}
-			}
-		}
-
-		reinterpret_cast<uint4*>(BitMarkArray + BlockIndex)[0] = reinterpret_cast<uint4*>(Queue)[0];
-		reinterpret_cast<uint4*>(BitMarkArray + BlockIndex)[BLOCK_SIZE] = reinterpret_cast<uint4*>(Queue)[1];
-
-		BitMarkArray += stride;
-	}
-	atomicAdd(&VisitResult, founds);*/
 }
 
 
@@ -91,8 +61,8 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 	{
 		if (Tid < FrontierSize){
 			SMemF1[Tid] = devSource[j];
-			//markWrite<cub::LOAD_CS, cub::STORE_CS, int>(BitMask, SMemF1[Tid]);
-			AtomicMarkWrite(BitMask, SMemF1[Tid]);
+			markWrite<cub::LOAD_CG, cub::STORE_CG, int>(BitMask, SMemF1[Tid]);
+			//AtomicMarkWrite(BitMask, SMemF1[Tid]);
 		}
 	
 		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
@@ -116,8 +86,8 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 						if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
 							devDistance[dest].y = current.y;
 							Queue[founds++] = dest;
-							AtomicMarkWrite(BitMask, dest);
-							//markWrite<cub::LOAD_CS, cub::STORE_CS, int>(BitMask, dest);
+							//AtomicMarkWrite(BitMask, dest);
+							markWrite<cub::LOAD_CG, cub::STORE_CG, int>(BitMask, dest);
 						}
 						else if (destination.y != current.y && destination.y < Nsources){	
 							Matrix[ (current.y     * Nsources) + destination.y ] = true;	
@@ -159,21 +129,21 @@ __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 	int founds  = 0;
 	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < BMsize; BlockIndex += stride)
 	{
-		int Queue[8];
+		char Queue[32];
 
 		reinterpret_cast<int4*>(Queue)[0] = reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[0];
 		reinterpret_cast<int4*>(Queue)[1] = __ldg( &reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[BLOCK_SIZE] );
 
 		#pragma unroll
-		for (int i = 0; i < 8; i++){
+		for (int i = 0; i < 32; i++){
 			#pragma unroll
-			for (int j = 0; j < 32; j++){
-				const int ldg_stride = i >= 4 ? BLOCK_SIZE * 128 : 0;
-				const int index = (BlockIndex * 32) + (Tid * 128) + ldg_stride + (i%4 * 32) + j;
-				if ((Queue[i] & (1 << (31 - j))) == 0 && index < N && visitAdjiacent(index, devNode, devEdge, BitMask))
+			for (int j = 0; j < 8; j++){
+				const int ldg_stride = i >= 16 ? BLOCK_SIZE * 128 : 0;
+				const int index = (BlockIndex * 32) + (Tid * 128) + ldg_stride + (i%16 * 8) + j;
+				if ((Queue[i] & (1 << (7 - j))) == 0 && index < N && visitAdjiacentBit(index, devNode, devEdge, BitMask))
 				{
-						Queue[i] |= (1 << (31 - j));
-						founds++;
+					Queue[i] |= (1 << (7 - j));
+					founds++;
 				}
 			}
 		}

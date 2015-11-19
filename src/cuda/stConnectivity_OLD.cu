@@ -13,10 +13,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	size_t sizeN1 	  = (N+1) * sizeof(int);
 	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
-	size_t sizeBMask  = N * sizeof(bool);
-
-	printf("int : %d \nbool: %d\n", sizeof(int), sizeof(bool));
-
+	//size_t sizeBMask  = N * sizeof(bool);
+	size_t sizeBMask  = (N + (1024 * BLOCK_SIZE)) * sizeof(bool);
 	
 
 	/***    ALLOCATE HOST MEMORY    ***/
@@ -123,19 +121,20 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 			int zero = 0;
 			int level = 0;
 			int result = 0;
-			int* BM = (int*)calloc(N, sizeof(int));
+			int BMsize = ceil((double)N / 4.0); 
+			//int* BM = (int*)calloc(N, sizeof(int));
 
 			TM_BU.start();
 			while( FrontierSize )
 			{
-			    //gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-			    gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+				//gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
+				gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
 				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-			    				(Dvertex, Dedges, DBitMask, N);
-			    gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-			    //gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-			   	//printf("Level %d FrontierSize %d  \tremaining %d\n", level++, FrontierSize, FrontierSize1);
-		    }
+								(Dvertex, Dedges, DBitMask, BMsize, N);
+				gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+				//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+				//printf("Level %d FrontierSize %d  \tremaining %d\n", level++, FrontierSize, FrontierSize1);
+			}
 		    TM_BU.stop();
 		    msecBOT = TM_BU.duration();
 
