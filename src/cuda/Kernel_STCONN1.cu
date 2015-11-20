@@ -7,31 +7,33 @@
 
 
 
-__global__ void CheckVisit(	bool* __restrict__ BitMask,
+/*
+* kERNEL FUNCTION THAT CHECKS IF EVERY NODE HAS BEEN VISITED
+*/
+__global__ void CheckVisit(	const int* __restrict__ devNode, 
+							const int* __restrict__ devEdge,
+							int* __restrict__ BitMask,
+							const int BMsize,
 							const int N)
 {
 	int founds = 0;
-	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-		if(BitMask[index] == 0)
+	for (int i = GTid; i < N; i+=MAX_CONCURR_TH)
+		if(markAccess<cub::LOAD_CG, int>(BitMask, i) == 0 ){
 			founds++;
+	}
+
 	atomicAdd(&VisitResult, founds);
 }
 
 
-
-__device__ __forceinline__ int visit(	const int* __restrict__ devNode,
-										const int* __restrict__ devEdge,
-										bool* __restrict__ BitMask,
-										const int index)
+/*
+* KERNEL FUNCTION FOR SET EXTRA BITS TO 1
+*/
+__global__ void initBitMask(int* BitMask, const int N, const int MaskSize)
 {
-	const int start = devNode[index];
-	const int end = devNode[index + 1];
-	for (int k = start; k < end; k++){
-		if(BitMask[devEdge[k]] == 1){
-			return 1;
-		}
-	}
-	return 0;
+	int totBits = MaskSize * 8 * sizeof(int);
+	if(GTid < (totBits - N))
+		markWrite<cub::LOAD_CG, cub::STORE_CG, int>(BitMask, N + GTid);
 }
 
 
@@ -44,7 +46,7 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 									const int* __restrict__ devSource,
 									int2* __restrict__ devDistance,
 									bool* __restrict__ Matrix,
-									bool*  __restrict__ BitMask, 
+									int* __restrict__ BitMask, 
 									const int Nsources,
 									const int E)
 {
@@ -54,11 +56,13 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
 
+	
 	for(int j = Bid; j < Nsources; j += gridDim.x)
 	{
 		if (Tid < FrontierSize){
 			SMemF1[Tid] = devSource[j];
-			BitMask[SMemF1[Tid]] = 1;
+			markWrite<cub::LOAD_CG, cub::STORE_CG, int>(BitMask, SMemF1[Tid]);
+			//AtomicMarkWrite(BitMask, SMemF1[Tid]);
 		}
 	
 		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
@@ -75,14 +79,15 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 				{
 					const int dest = devEdge[k];
 					const int2 destination = devDistance[dest];	
-						
+	
 					if(founds < REG_QUEUE)
 					{
 						counter++;
 						if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
 							devDistance[dest].y = current.y;
 							Queue[founds++] = dest;
-							BitMask[dest] = 1;
+							//AtomicMarkWrite(BitMask, dest);
+							markWrite<cub::LOAD_CG, cub::STORE_CG, int>(BitMask, dest);
 						}
 						else if (destination.y != current.y && destination.y < Nsources){	
 							Matrix[ (current.y     * Nsources) + destination.y ] = true;	
@@ -96,7 +101,6 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 	
 			level++;
 			FrontierSize = F2SizePtr[0];
-
 			GlobalWrite(counter, &GlobalCounter);
 
 			__syncthreads();
@@ -105,69 +109,51 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 			if(__int2double_rn(GlobalCounter) / __int2double_rn(E) > TRESHOLD)
 				return;
 		}
-		level = 0; FrontierSize = 1;
+		FrontierSize = 1;  level = 0; 
 	}
 }
 
 
 
 /*
-* KERNEL FOR BOTTOM-UP VISIT
+* BOTTOM UP KERNEL
 */
 __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
-									bool*  __restrict__ BitMask,
+									int*  __restrict__ BitMask,
 									const int BMsize,
 									const int N)
 {
-
-	int founds = 0;
-	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-		if(BitMask[index] == 0 && visit(devNode, devEdge, BitMask, index))
-		{
-			BitMask[index] = 1;
-			founds++;
-		}
-	GlobalWrite( founds, &BottomUp_FrontSize);
-}
-
-
-
-/*
-* KERNEL FOR BOTTOM-UP VISIT
-*/
-/*__global__ void Bottom_Up_Kernel1(	const int* __restrict__ devNode,
-									const int* __restrict__ devEdge,
-									bool*  __restrict__ BitMask,
-									const int BMsize,
-									const int N)
-{
-
+	volatile int* devOutputV = const_cast<volatile int*>(BitMask);
 	const int stride = gridDim.x * BLOCK_SIZE * 8;
-	bool *BitMarkArray = BitMask + Tid * 4;
+	int* BitMarkArray = BitMask + Tid * 4;
 	int founds  = 0;
-	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < N; BlockIndex += stride)
+	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < BMsize; BlockIndex += stride)
 	{
-		bool Queue[8];
- 
-		reinterpret_cast<int*>(Queue)[0] = reinterpret_cast<int*>(BitMask + BlockIndex)[Tid];
-		reinterpret_cast<int*>(Queue)[1] = __ldg( &reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] );
-		
+		char Queue[32];
+
+		reinterpret_cast<int4*>(Queue)[0] = reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[0];
+		reinterpret_cast<int4*>(Queue)[1] = __ldg( &reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[BLOCK_SIZE] );
+
 		#pragma unroll
-		for (int i = 0; i < 8; i++){
-			const int ldg_stride = i >= 4 ? BLOCK_SIZE * 4 : 0;
-			const int index = BlockIndex + (Tid * 4) + ldg_stride + i%4;
-			if (Queue[i] == 0 && index < N && visitAdjiacent(index, devNode, devEdge, BitMask))
-			{
-				Queue[i] = 1;
-				founds++;
+		for (int i = 0; i < 32; i++){
+			#pragma unroll
+			for (int j = 0; j < 8; j++){
+				const int ldg_stride = i >= 16 ? BLOCK_SIZE * 128 : 0;
+				const int index = (BlockIndex * 32) + (Tid * 128) + ldg_stride + (i%16 * 8) + j;
+				if ((Queue[i] & (1 << (7 - j))) == 0 && index < N && visitAdjiacentBit(index, devNode, devEdge, BitMask))
+				{
+					markWrite<cub::LOAD_CG, cub::STORE_CG, volatile int>(devOutputV, index);
+					//Queue[i] |= (1 << (7 - j));
+					founds++;
+				}
 			}
 		}
 
-		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid] = reinterpret_cast<int*>(Queue)[0];
-		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] = reinterpret_cast<int*>(Queue)[1];
+		//reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[0] = reinterpret_cast<int4*>(Queue)[0];
+		//reinterpret_cast<int4*>(BitMarkArray + BlockIndex)[BLOCK_SIZE] = reinterpret_cast<int4*>(Queue)[1];
 		
 		BitMarkArray += stride;
 	}
 	GlobalWrite( founds, &BottomUp_FrontSize);
-}*/
+}
