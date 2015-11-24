@@ -13,8 +13,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	size_t sizeN1 	  = (N+1) * sizeof(int);
 	size_t sizeSrcs	  = Nsources * sizeof(int);
 	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
-	//size_t sizeBMask  = N * sizeof(bool);
-	size_t sizeBMask  = (N + (1024 * BLOCK_SIZE)) * sizeof(bool);
+	size_t sizeBMask  = N * sizeof(bool);
+	//size_t sizeBMask  = (N + (1024 * BLOCK_SIZE)) * sizeof(bool);
 	
 
 	/***    ALLOCATE HOST MEMORY    ***/
@@ -43,19 +43,19 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 	/***    SERVICE VARIABLES    ***/
- 	std::vector<double> mean_times(3);
- 	std::vector<double> par_times(N_TEST);
- 	std::vector<double> BOT_times(N_TEST);
- 	std::vector<double> seq_times(N_TEST);
- 	std::vector<long double> Percentual(N_TEST);
- 	int 	connectCnt = 0;
- 	int    percCounter = 0;
- 	int  unfinishedCnt = 0;
- 	long double   perc = 0.0;
+	std::vector<double> mean_times(3);
+	std::vector<double> par_times(N_TEST);
+	std::vector<double> BOT_times(N_TEST);
+	std::vector<double> seq_times(N_TEST);
+	std::vector<long double> Percentual(N_TEST);
+	int 	connectCnt = 0;
+	int    percCounter = 0;
+	int  unfinishedCnt = 0;
+	long double   perc = 0.0;
 
 
 	srand (time(NULL));
- 	for (int test = 0; test < N_TEST; ++test)
+	for (int test = 0; test < N_TEST; ++test)
 	{
 
 		/***    CHOOSE RANDOM SOURCE, DEST AND EXTRA-SOURCES    ***/
@@ -64,36 +64,36 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		int target = rand() % N;
 		while(target == source)		target = rand() % N;
 
-	    ChooseRandomNodes(sources, N, Nsources, source, target);
+		ChooseRandomNodes(sources, N, Nsources, source, target);
 
 
-	    /***    STRUCTURES INITIALIZATION    ***/
-	    for (int i = 0; i < N; ++i)
-	    	Distance[i] = make_int2(INT_MAX, INT_MAX);
+		/***    STRUCTURES INITIALIZATION    ***/
+		for (int i = 0; i < N; ++i)
+			Distance[i] = make_int2(INT_MAX, INT_MAX);
 
-	    for (int i = 0; i < Nsources; ++i)
+		for (int i = 0; i < Nsources; ++i)
 			Distance[sources[i]] = make_int2(0, i);
 
-	    
-	    /***    MEMCOPY HOST_TO_DEVICE    ***/
-	    gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
-	    gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
+
+		/***    MEMCOPY HOST_TO_DEVICE    ***/
+		gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
+		gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
+		gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
+		gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
+		gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 		gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int)) );
-	    gpuErrchk( cudaMemset(Dvisited, 0, sizeSrcs) );
-	    gpuErrchk( cudaMemset(DBitMask, 0, sizeBMask) );
+		gpuErrchk( cudaMemset(Dvisited, 0, sizeSrcs) );
+		gpuErrchk( cudaMemset(DBitMask, 0, sizeBMask) );
 
 		
 		/***    INITIALIZE TIMERS    ***/
 		Timer<HOST> TM;
-	    Timer<DEVICE> TM_TD;
-	    Timer<DEVICE> TM_BU;
-	    float msecPAR = 0.0f;
-	    float msecSEQ = 0.0f;
-	    float msecBOT = 0.0f;
-	    bool  connect = false;
+		Timer<DEVICE> TM_TD;
+		Timer<DEVICE> TM_BU;
+		float msecPAR = 0.0f;
+		float msecSEQ = 0.0f;
+		float msecBOT = 0.0f;
+		bool  connect = false;
 
 
 		/***    LAUNCH RESET KERNEL    ***/
@@ -103,12 +103,12 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
 		TM_TD.start();
 		STCONN_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-	    			(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources, E);
-	    TM_TD.stop();
-	    msecPAR = TM_TD.duration();
+					(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources, E);
+		TM_TD.stop();
+		msecPAR = TM_TD.duration();
 
 
-	    /***    CHECK VISIT PERCENTAGE    ***/
+		/***    CHECK VISIT PERCENTAGE    ***/
 		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
 		
@@ -122,7 +122,6 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 			int zero = 0;
 			int result = 0;
 			int BMsize = ceil((double)N / 4.0); 
-			//int* BM = (int*)calloc(N, sizeof(int));
 
 			TM_BU.start();
 			while( FrontierSize )
@@ -133,11 +132,9 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 								(Dvertex, Dedges, DBitMask, BMsize, N);
 				gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 				//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-				//level++;
 			}
-			//printf("Levels %d\n", level++);
-		    TM_BU.stop();
-		    msecBOT = TM_BU.duration();
+			TM_BU.stop();
+			msecBOT = TM_BU.duration();
 
 
 
@@ -155,34 +152,28 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		}
 
 
-		/***    PRINT MATRIX    ***/
-		//PrintMatrix<bool>(matrix, Nsources);
-	    
-
-	    /***    MATRIX STCONN ON HOST    ***/
-	    #if !BFS
-		    TM.start();		    
-  			
-  			if(Nsources > 1)
-  			{
+		/***    MATRIX STCONN ON HOST    ***/
+		#if !BFS
+			TM.start();		    
+			
+			if(Nsources > 1)
+			{
 				gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
 				connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
-  			}
-  			else
-  				connect = true;
+			}
+			else
+				connect = true;
 
 			TM.stop();	    	
-		    msecSEQ = TM.duration();
-	    #endif
+			msecSEQ = TM.duration();
+		#endif
 
-	    
-	    /***    PRINT RESULTS    ***/
-	    #if (!BFS)
+
+		/***    PRINT RESULTS    ***/
+		#if (!BFS)
 			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
 															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecPAR + msecSEQ + msecBOT, 27, 0);
-			//if(!connect)
-			//	return;
 		#endif
 
 
@@ -190,11 +181,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		par_times[test] = msecPAR;
 		seq_times[test] = msecSEQ;
 		BOT_times[test] = msecBOT;
-		
-		//if( !connect )
-		//	connectCnt++;
 
-	    if( perc < 100 )
+		if( perc < 100 )
 			unfinishedCnt++;
 	}
 	
@@ -204,19 +192,19 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	computeMeanPercentage(Percentual, percCounter);
 	
 	/***    FREE DEVICE MEMORY    ***/
-    cudaFree(Ddistance);
+	cudaFree(Ddistance);
 	cudaFree(Dvertex);
-    cudaFree(DMatrix);
-    cudaFree(Dedges);
-    cudaFree(DBitMask);
-    cudaFree(Dsources);
-    cudaFree(Dvisited);
+	cudaFree(DMatrix);
+	cudaFree(Dedges);
+	cudaFree(DBitMask);
+	cudaFree(Dsources);
+	cudaFree(Dvisited);
 
 	/***    FREE HOST MEMORY    ***/
 	free(Distance);
 	free(matrix);
-    free(Queue);
-    free(sources);
+	free(Queue);
+	free(sources);
 }
 
 
@@ -263,45 +251,38 @@ int main(int argc, char *argv[]){
 	/***    READ GRAPH FROM FILE    ***/
 	int N, E, nof_lines;
 	int Nsources = 0;
- 	GDirection GraphDirection;		//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
- 	Parameters(argc, argv, GraphDirection, Nsources);
- 	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
-    Graph graph(N, E, GraphDirection);
-    readGraph::readSTD(argv[1], graph, nof_lines);
-    graph.DegreeAnalisys();
+	GDirection GraphDirection;		//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
+	Parameters(argc, argv, GraphDirection, Nsources);
+	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
+	Graph graph(N, E, GraphDirection);
+	readGraph::readSTD(argv[1], graph, nof_lines);
+	graph.DegreeAnalisys();
 
 
-    /***    PRINT CONFIG INFO    ***/
+	/***    PRINT CONFIG INFO    ***/
 	std::cout << "\n----------------------KERNEL INFO---------------------" 			<< std::endl
-    	 << "            Block dimension : " <<  BLOCK_SIZE 							<< std::endl
-    	 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< std::endl
-    	 << "       Shared Memory per SM : " <<  SMem_Per_SM 							<< std::endl
-    	 << "    Shared Memory per block : " <<  SMem_Per_Block(BLOCK_SIZE) 			<< std::endl
-    	 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< std::endl
-    	 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< std::endl
-    	 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
+		 << "            Block dimension : " <<  BLOCK_SIZE 							<< std::endl
+		 << "      Max concurrent blocks : " <<  MAX_CONCURR_BL(BLOCK_SIZE) 			<< std::endl
+		 << "       Shared Memory per SM : " <<  SMem_Per_SM 							<< std::endl
+		 << "    Shared Memory per block : " <<  SMem_Per_Block(BLOCK_SIZE) 			<< std::endl
+		 << "Int Shared Memory per block : " <<  IntSMem_Per_Block(BLOCK_SIZE) 			<< std::endl
+		 << "         Frontier dimension : " <<  FRONTIER_SIZE 							<< std::endl
+		 << "         Int frontier limit : " <<  BLOCK_FRONTIER_LIMIT 					<< std::endl
 		 << "--------------------------------------------------------" 	   << std::endl << std::endl;
 
 	/***    LAUNCH ST-CONN FUNCTION    ***/
-    if(Nsources != 0)
-    {
-    	printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", Nsources, TRESHOLD*100);
-    	doSTCONN(graph, N, E, Nsources);
-    }
-    else
-    {
+	if(Nsources != 0)
+	{
+		printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", Nsources, TRESHOLD*100);
+		doSTCONN(graph, N, E, Nsources);
+	}
+	else
+	{
 		for (int i = 0; i < LENGTH; ++i)
 		{
 			printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", SOURCES[i], TRESHOLD*100);
 			doSTCONN(graph, N, E, SOURCES[i]);
 		}
-    }
-    /*else
-    {
-    	printf("Evaluating appropriate sources number\n");
-    	Nsources = EvaluateSourcesNum(avgDeg, N);
-    	printf("Launch stConnectivity with %d sources\n\n", Nsources);
-		doSTCONN(graph, N, E, Nsources);
-    }*/
+	}
 	return 0;
 }

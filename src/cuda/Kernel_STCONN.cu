@@ -123,11 +123,13 @@ __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 
 	int founds = 0;
 	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
+	{
 		if(BitMask[index] == 0 && visit(devNode, devEdge, BitMask, index))
 		{
 			BitMask[index] = 1;
 			founds++;
 		}
+	}
 	GlobalWrite( founds, &BottomUp_FrontSize);
 }
 
