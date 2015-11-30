@@ -5,8 +5,9 @@
 #define				   DEBUG	1
 #define				  ATOMIC	1
 #define 		   BOTTOM_UP	1
-#define				TRESHOLD 	0.01
-#define				  N_TEST 	5
+#define				TRESHOLD 	0.65
+#define				  N_TEST 	10
+#define				MAX_SIZE	10000
 
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
@@ -44,5 +45,5 @@ const int REG_QUEUE  = 	32;
 #define cudaAssert(condition, pos) \
   if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
 
-const int SOURCES[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
+const int SOURCES[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000};
 const int LENGTH = sizeof(SOURCES) / sizeof(int);

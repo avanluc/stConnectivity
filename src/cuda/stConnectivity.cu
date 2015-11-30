@@ -5,40 +5,41 @@
 #include "statistic.h"
 
 
-void doSTCONN(Graph graph, int N, int E, int Nsources){
+void doSTCONN(Graph graph, int N, int E, double Treshold){
 	
 	/***    CALCULATE SIZES    ***/
 	size_t sizeE 	  = E * sizeof(int);
 	size_t sizeN 	  = N * sizeof(int2);
 	size_t sizeN1 	  = (N+1) * sizeof(int);
-	size_t sizeSrcs	  = Nsources * sizeof(int);
-	size_t sizeMatrix = Nsources * Nsources * sizeof(bool);
+	size_t sizeSrcs	  = 2 * sizeof(int);
+	size_t sizeMatrix = MAX_SIZE * MAX_SIZE * sizeof(bool);
 	size_t sizeBMask  = N * sizeof(bool);
+	size_t sizeCurand = MAX_CONCURR_BL(BLOCK_SIZE) * sizeof(curandState);
 	//size_t sizeBMask  = (N + (1024 * BLOCK_SIZE)) * sizeof(bool);
 	
 
 	/***    ALLOCATE HOST MEMORY    ***/
 	int2 *Distance 	= (int2*)calloc(N, sizeof(int2));	
-	int *sources 	= (int*)calloc(Nsources, sizeof(int));
-	int *Queue 		= (int*)calloc(Nsources, sizeof(int));	
-	bool *matrix 	= (bool*)calloc(Nsources * Nsources, sizeof(bool));
+	int *sources 	= (int*)calloc(2, sizeof(int));
+	int *Queue 		= (int*)calloc(MAX_SIZE, sizeof(int));	
+	bool *matrix 	= (bool*)calloc(MAX_SIZE * MAX_SIZE, sizeof(bool));
 	
 
 	/***    ALLOCATE DEVICE MEMORY    ***/
 	int *Dedges;
 	int *Dvertex;
-	int *Dsources;
-	int *Dvisited;
+	int *Dsource;
 	bool *DBitMask;
 	int2 *Ddistance;
 	bool *DMatrix;
+	curandState* devStates;
 
+    gpuErrchk( cudaMalloc((void **) &devStates, sizeCurand) );
 	gpuErrchk( cudaMalloc((void **) &Dvertex, 	sizeN1) );
 	gpuErrchk( cudaMalloc((void **) &Dedges, 	sizeE) );
 	gpuErrchk( cudaMalloc((void **) &DMatrix, 	sizeMatrix) );
 	gpuErrchk( cudaMalloc((void **) &Ddistance, sizeN) );
-	gpuErrchk( cudaMalloc((void **) &Dsources, 	sizeSrcs) );
-	gpuErrchk( cudaMalloc((void **) &Dvisited, 	sizeSrcs) );
+	gpuErrchk( cudaMalloc((void **) &Dsource, 	sizeSrcs) );
 	gpuErrchk( cudaMalloc((void **) &DBitMask, 	sizeBMask) );
 
 
@@ -64,25 +65,24 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		int target = rand() % N;
 		while(target == source)		target = rand() % N;
 
-		ChooseRandomNodes(sources, N, Nsources, source, target);
-
 
 		/***    STRUCTURES INITIALIZATION    ***/
 		for (int i = 0; i < N; ++i)
 			Distance[i] = make_int2(INT_MAX, INT_MAX);
 
-		for (int i = 0; i < Nsources; ++i)
-			Distance[sources[i]] = make_int2(0, i);
+		sources[0] = source;
+		sources[1] = target;
+		Distance[source] = make_int2(0, 0);
+		Distance[target] = make_int2(0, 1);
 
 
 		/***    MEMCOPY HOST_TO_DEVICE    ***/
+		gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int)) );
 		gpuErrchk( cudaMemcpy(Dvertex, graph.OutNodes, sizeN1, cudaMemcpyHostToDevice) );
 		gpuErrchk( cudaMemcpy(Dedges, graph.OutEdges, sizeE, cudaMemcpyHostToDevice) );
 		gpuErrchk( cudaMemcpy(DMatrix, matrix, sizeMatrix, cudaMemcpyHostToDevice) );
 		gpuErrchk( cudaMemcpy(Ddistance, Distance, sizeN, cudaMemcpyHostToDevice) );
-		gpuErrchk( cudaMemcpy(Dsources, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
-		gpuErrchk( cudaMemcpyToSymbol(GlobalCounter, &VisitedEdges, sizeof(int)) );
-		gpuErrchk( cudaMemset(Dvisited, 0, sizeSrcs) );
+		gpuErrchk( cudaMemcpy(Dsource, sources, sizeSrcs, cudaMemcpyHostToDevice) );		
 		gpuErrchk( cudaMemset(DBitMask, 0, sizeBMask) );
 
 		
@@ -97,23 +97,26 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 
 
 		/***    LAUNCH RESET KERNEL    ***/
-		//GReset<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE>>>();
+		setup_curand<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(devStates);
 
-
+			int totSouce = 0;
+			
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
 		TM_TD.start();
-		STCONN_BlockKernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-					(Dvertex, Dedges, Dsources, Ddistance, DMatrix, DBitMask, Nsources, E);
+		TopDown_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+					(Dvertex, Dedges, Dsource, Ddistance, DMatrix, DBitMask, Treshold, E, N, devStates);
 		TM_TD.stop();
 		msecPAR = TM_TD.duration();
 
+			cudaMemcpyFromSymbol(&totSouce, color, sizeof(int), 0, cudaMemcpyDeviceToHost);
+			printf("Total sources = %d\n", totSouce);
 
 		/***    CHECK VISIT PERCENTAGE    ***/
 		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
 		
 
-		if(BOTTOM_UP && perc > TRESHOLD*100 )
+		if(BOTTOM_UP && perc > Treshold*100 )
 		{
 
 			//int FrontierSize1 = 0;
@@ -121,14 +124,14 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 			int FrontierSize = 1;
 			int zero = 0;
 			int result = 0;
-			int BMsize = ceil((double)N / 4.0); 
+			int BMsize = ceil((double)N / 4.0);
 
 			TM_BU.start();
 			while( FrontierSize )
 			{
 				//gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize1, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
 				gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &zero, sizeof(int), 0, cudaMemcpyHostToDevice) );
-				Bottom_Up_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+				BottomUp_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
 								(Dvertex, Dedges, DBitMask, BMsize, N);
 				gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 				//gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize1, BottomUp_FrontSize1, sizeof(int), 0, cudaMemcpyDeviceToHost) );
@@ -156,13 +159,8 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		#if !BFS
 			TM.start();		    
 			
-			if(Nsources > 1)
-			{
-				gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-				connect = MatrixBFS(matrix, Nsources, 0, 1, Queue);
-			}
-			else
-				connect = true;
+			//gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
+			//connect = MatrixBFS(matrix, MAX_SIZE, 0, 1, Queue);
 
 			TM.stop();	    	
 			msecSEQ = TM.duration();
@@ -172,7 +170,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 		/***    PRINT RESULTS    ***/
 		#if (!BFS)
 			printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
-															test, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+															test+1, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 															27, 0, 27, 0, 31, msecPAR + msecSEQ + msecBOT, 27, 0);
 		#endif
 
@@ -197,8 +195,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 	cudaFree(DMatrix);
 	cudaFree(Dedges);
 	cudaFree(DBitMask);
-	cudaFree(Dsources);
-	cudaFree(Dvisited);
+	cudaFree(Dsource);
 
 	/***    FREE HOST MEMORY    ***/
 	free(Distance);
@@ -212,7 +209,7 @@ void doSTCONN(Graph graph, int N, int E, int Nsources){
 /*
 * Read command line parameters
 */
-void Parameters(int argc, char* argv[], GDirection &GDir, int& Nsources) {
+void Parameters(int argc, char* argv[], GDirection &GDir, double& Treshold) {
     std::string errString(
     "Syntax Error:\n\n stConnectivity <graph_path> [ <graph_direction> ] [ -n <number_of_sources>] [-A]\n\n\
     <graph_direction>:\n\
@@ -231,10 +228,10 @@ void Parameters(int argc, char* argv[], GDirection &GDir, int& Nsources) {
         else if (parameter.compare("-U") == 0)
             GDir = UNDIRECTED;
         else if ( /*i + 1 < argc &&*/ parameter.compare("-n") == 0 && 
-        		std::string(argv[i + 1]).find_first_not_of("0123456789") == std::string::npos )
+        		std::string(argv[i + 1]).find_first_not_of("0123456789.") == std::string::npos )
         {
             std::istringstream ss(argv[++i]);
-            ss >> Nsources;
+            ss >> Treshold;
         }
         else
             error(errString)
@@ -250,9 +247,9 @@ int main(int argc, char *argv[]){
 
 	/***    READ GRAPH FROM FILE    ***/
 	int N, E, nof_lines;
-	int Nsources = 0;
+	double Treshold = 0.0;
 	GDirection GraphDirection;		//DIRECTED = 0, UNDIRECTED = 1, UNDEFINED = 2
-	Parameters(argc, argv, GraphDirection, Nsources);
+	Parameters(argc, argv, GraphDirection, Treshold);
 	readGraph::readGraphHeader(argv[1], N, E, nof_lines, GraphDirection);
 	Graph graph(N, E, GraphDirection);
 	readGraph::readSTD(argv[1], graph, nof_lines);
@@ -271,17 +268,17 @@ int main(int argc, char *argv[]){
 		 << "--------------------------------------------------------" 	   << std::endl << std::endl;
 
 	/***    LAUNCH ST-CONN FUNCTION    ***/
-	if(Nsources != 0)
+	if(Treshold != 0)
 	{
-		printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", Nsources, TRESHOLD*100);
-		doSTCONN(graph, N, E, Nsources);
+		printf("\n----------Launch stConnectivity with treshold %.2f%%----------\n\n", Treshold*100);
+		doSTCONN(graph, N, E, Treshold);
 	}
 	else
 	{
 		for (int i = 0; i < LENGTH; ++i)
 		{
-			printf("\n----------Launch stConnectivity with %d sources and treshold %.2f%%----------\n\n", SOURCES[i], TRESHOLD*100);
-			doSTCONN(graph, N, E, SOURCES[i]);
+			printf("\n----------Launch stConnectivity with treshold %.2f%%----------\n\n", Treshold*100);
+			doSTCONN(graph, N, E, Treshold);
 		}
 	}
 	return 0;

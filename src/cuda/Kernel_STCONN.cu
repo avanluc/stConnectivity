@@ -4,6 +4,14 @@
 #include "GlobalSync.cu"
 #include "GlobalWrite.cu"
 #include "CacheFunc.cu"
+#include <curand_kernel.h>
+
+
+__global__ void setup_curand(curandState* state)
+{
+	if(Tid == 0)
+		curand_init(Bid, 0, 0, &state[Bid]);
+}
 
 
 
@@ -39,28 +47,43 @@ __device__ __forceinline__ int visit(	const int* __restrict__ devNode,
 /*
 * KERNEL FUNCTION FOR STCONNECTIVITY
 */
-__global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
-									const int* __restrict__ devEdge,
-									const int* __restrict__ devSource,
-									int2* __restrict__ devDistance,
-									bool* __restrict__ Matrix,
-									bool*  __restrict__ BitMask, 
-									const int Nsources,
-									const int E)
+__global__ void TopDown_Kernel (const int* __restrict__ devNode,
+								const int* __restrict__ devEdge,
+								const int* __restrict__ devSource,
+								int2* __restrict__ devDistance,
+								bool* __restrict__ Matrix,
+								bool* __restrict__ BitMask, 
+								const double Treshold,
+								const int E,
+								const int N,
+								curandState* globalState)
 {
 	int Queue[REG_QUEUE];
 	int FrontierSize = 1;
 	int level = 0;
+	uint src  = 0;
 	int* SMemF1 = (int*) &SMem[F1_OFFSET];
 	int* F2SizePtr = (int*) &SMem[F2Size_POS];
 
-	for(int j = Bid; j < Nsources; j += gridDim.x)
+	if(Bid < 2 && Tid == 0){
+		color = 2;
+		SMemF1[Tid] = devSource[Bid];
+		BitMask[SMemF1[Tid]] = 1;
+		devDistance[SMemF1[Tid]] = make_int2(0, Bid);
+	}
+
+	while(__int2double_rn(GlobalCounter) / __int2double_rn(E) < Treshold)
 	{
-		if (Tid < FrontierSize){
-			SMemF1[Tid] = devSource[j];
-			BitMask[SMemF1[Tid]] = 1;
+		if(Tid == 0 && src == 0)
+		{
+			do{
+				src = ((uint)curand(&globalState[Bid])) % N;
+			}while(BitMask[src]);
+			devDistance[src] = make_int2(0, atomicAdd(&color, 1));
+			BitMask[src] = 1;
+			SMemF1[Tid] = src;
 		}
-	
+			
 		while ( FrontierSize && FrontierSize < BLOCK_FRONTIER_LIMIT )
 		{
 			int founds = 0; int counter = 0;
@@ -68,8 +91,8 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 			{
 				const int index = SMemF1[t];
 				const int start = devNode[index];
+				const int   end = devNode[index + 1];	
 				const int2 current = devDistance[index];
-				const int end = devNode[index + 1];	
 	
 				for (int k = start; k < end; k++)
 				{
@@ -84,9 +107,9 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 							Queue[founds++] = dest;
 							BitMask[dest] = 1;
 						}
-						else if (destination.y != current.y && destination.y < Nsources){	
-							Matrix[ (current.y     * Nsources) + destination.y ] = true;	
-							Matrix[ (destination.y * Nsources) + current.y 	   ] = true;	
+						else if (destination.y != current.y && destination.y < MAX_SIZE){	
+							Matrix[ (current.y     * MAX_SIZE) + destination.y ] = true;	
+							Matrix[ (destination.y * MAX_SIZE) + current.y 	   ] = true;	
 						}
 					}
 				}
@@ -101,11 +124,11 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 
 			__syncthreads();
 			F2SizePtr[0] = 0;
-
-			if(__int2double_rn(GlobalCounter) / __int2double_rn(E) > TRESHOLD)
-				return;
 		}
-		level = 0; FrontierSize = 1;
+		//printf("Block %d has done his job!\n", Bid);
+		FrontierSize = 1; 
+		level = 0; 
+		src = 0;
 	}
 }
 
@@ -114,7 +137,7 @@ __global__ void STCONN_BlockKernel (const int* __restrict__ devNode,
 /*
 * KERNEL FOR BOTTOM-UP VISIT
 */
-__global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
+__global__ void BottomUp_Kernel(	const int* __restrict__ devNode,
 									const int* __restrict__ devEdge,
 									bool*  __restrict__ BitMask,
 									const int BMsize,
@@ -132,44 +155,3 @@ __global__ void Bottom_Up_Kernel(	const int* __restrict__ devNode,
 	}
 	GlobalWrite( founds, &BottomUp_FrontSize);
 }
-
-
-
-/*
-* KERNEL FOR BOTTOM-UP VISIT
-*/
-/*__global__ void Bottom_Up_Kernel1(	const int* __restrict__ devNode,
-									const int* __restrict__ devEdge,
-									bool*  __restrict__ BitMask,
-									const int BMsize,
-									const int N)
-{
-
-	const int stride = gridDim.x * BLOCK_SIZE * 8;
-	bool *BitMarkArray = BitMask + Tid * 4;
-	int founds  = 0;
-	for (int BlockIndex = Bid * BLOCK_SIZE * 8; BlockIndex < N; BlockIndex += stride)
-	{
-		bool Queue[8];
- 
-		reinterpret_cast<int*>(Queue)[0] = reinterpret_cast<int*>(BitMask + BlockIndex)[Tid];
-		reinterpret_cast<int*>(Queue)[1] = __ldg( &reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] );
-		
-		#pragma unroll
-		for (int i = 0; i < 8; i++){
-			const int ldg_stride = i >= 4 ? BLOCK_SIZE * 4 : 0;
-			const int index = BlockIndex + (Tid * 4) + ldg_stride + i%4;
-			if (Queue[i] == 0 && index < N && visitAdjiacent(index, devNode, devEdge, BitMask))
-			{
-				Queue[i] = 1;
-				founds++;
-			}
-		}
-
-		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid] = reinterpret_cast<int*>(Queue)[0];
-		reinterpret_cast<int*>(BitMask + BlockIndex)[Tid + BLOCK_SIZE] = reinterpret_cast<int*>(Queue)[1];
-		
-		BitMarkArray += stride;
-	}
-	GlobalWrite( founds, &BottomUp_FrontSize);
-}*/
