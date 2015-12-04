@@ -24,3 +24,5 @@ void PrintMatrix(T* Matrix, int size){
 
 bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, const int target, int* Queue);
 void ChooseRandomNodes(int* sources, const int V, const int Nsources, const int src, const int dst);
+bool stConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, const int source, const int target);
+void PrintResults(const int test, const int source, const int target, const bool connect, const float time);
