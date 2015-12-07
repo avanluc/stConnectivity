@@ -1,4 +1,4 @@
-#pragma once
+//#pragma once
 
 #include "prefixSumAsm.cu"
 #include "definition.cuh"

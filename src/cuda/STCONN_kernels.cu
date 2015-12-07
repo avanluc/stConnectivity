@@ -1,9 +1,9 @@
-#pragma once
+//#pragma once
 
 #include <assert.h>
 #include "GlobalSync.cu"
 #include "GlobalWrite.cu"
-#include "CacheFunc.cu"
+//#include "CacheFunc.cu"
 #include "STCONN_kernel_cores.cu"
 #include <curand_kernel.h>
 
@@ -103,6 +103,8 @@ __global__ void TopDown_Kernel (const int* __restrict__ devNode,
 	
 				for (int k = start; k < end; k++)
 				{
+					edgeVisit(devEdge[k], current, devDistance[devEdge[k]], level, Queue, devDistance, BitMask, Matrix, founds, counter);
+					/*
 					const int dest = devEdge[k];
 					const int2 destination = devDistance[dest];	
 						
@@ -118,7 +120,7 @@ __global__ void TopDown_Kernel (const int* __restrict__ devNode,
 							Matrix[ (current.y     * MAX_SIZE) + destination.y ] = true;
 							Matrix[ (destination.y * MAX_SIZE) + current.y 	   ] = true;
 						}
-					}
+					}*/
 				}
 			}
 

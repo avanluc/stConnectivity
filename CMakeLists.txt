@@ -19,7 +19,7 @@ elseif(COMPILER_SUPPORTS_CXX0X)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 else()
     message(FATAL_ERROR "Compiler ${CMAKE_CXX_COMPILER} has no C++11 support.")
-endif()
+endif()	
 
 if(CUDA_VERSION_MAJOR LESS 6)
 	message(FATAL_ERROR "\nRequired Cuda Toolkit >= v6.0   Founded: Cuda Toolkit v${CUDA_VERSION_MAJOR}")
@@ -105,7 +105,7 @@ find_library(
 	PATHS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib 
 )
 
-cuda_add_executable(stConnectivity ${PROJECT_SOURCE_DIR}/src/cuda/stConnectivity.cu ${HOST_SRC} ${DEVICE_SRC} ${UTIL_SRC})
+cuda_add_executable(stConnectivity ${PROJECT_SOURCE_DIR}/src/cuda/main.cu ${HOST_SRC} ${DEVICE_SRC} ${UTIL_SRC})
 
 target_link_libraries(stConnectivity ${DEVRT_LIBRARY})
 
