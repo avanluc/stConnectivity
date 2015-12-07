@@ -5,7 +5,7 @@
 #define			   BOTTOM_UP 	1
 #define 		   SEQ_CHECK	1
 #define				TRESHOLD 	0.5
-#define				  N_TEST 	20
+#define				  N_TEST 	30
 #define				MAX_SIZE	10000
 
 /* CUDA CONFIG */

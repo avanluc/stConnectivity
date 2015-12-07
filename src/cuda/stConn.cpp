@@ -96,8 +96,8 @@ bool stConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, con
 void PrintResults(const int test, const int source, const int target, const bool connect, const float time)
 {
 	if(time < 0.0)
-		printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\n", 
-														test+1, source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
+		printf("    \tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\n\n", 
+														source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 														27, 0);
 	else
 		printf("#%d:\tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\t\ttime = %c[%d;%dm%.1f%c[%dm ms\n", 
