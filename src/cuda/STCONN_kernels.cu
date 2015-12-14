@@ -20,6 +20,17 @@ __global__ void setup_curand(curandState* state)
 
 
 /*
+* INITIALIZATION OF CURAND SEED
+*/
+__global__ void init_bottomUp_only(const int* __restrict__ devSource, bool* __restrict__ BitMask)
+{
+	if(GTid < 2)
+		BitMask[devSource[GTid]] = 1;
+}
+
+
+
+/*
 * RESET OF SHARED MEMORY
 */
 __global__ void clean()
@@ -104,23 +115,6 @@ __global__ void TopDown_Kernel (const int* __restrict__ devNode,
 				for (int k = start; k < end; k++)
 				{
 					edgeVisit(devEdge[k], current, devDistance[devEdge[k]], level, Queue, devDistance, BitMask, Matrix, founds, counter);
-					/*
-					const int dest = devEdge[k];
-					const int2 destination = devDistance[dest];	
-						
-					if(founds < REG_QUEUE)
-					{
-						counter++;
-						if ( atomicCAS(&devDistance[dest].x, INT_MAX, level) == INT_MAX ) {
-							devDistance[dest].y = current.y;
-							BitMask[dest] = 1;
-							Queue[founds++] = dest;
-						}
-						else if (destination.y < MAX_SIZE && destination.y != current.y ){
-							Matrix[ (current.y     * MAX_SIZE) + destination.y ] = true;
-							Matrix[ (destination.y * MAX_SIZE) + current.y 	   ] = true;
-						}
-					}*/
 				}
 			}
 
@@ -170,53 +164,3 @@ __global__ void BottomUp_Kernel(const int* __restrict__ devNode,
 	}
 	GlobalWrite( founds, &BottomUp_FrontSize );
 }
-
-
-
-
-
-
-
-
-
-
-/*__global__ void BottomUp_Kernel(const int* __restrict__ devNode,
-								const int* __restrict__ devEdge,
-								int2* __restrict__ devDistance,
-								bool* __restrict__ Matrix,
-								bool*  __restrict__ BitMask,
-								const int BMsize,
-								const int N)
-{
-	int founds = 0;
-	for (int index = GTid; index < N; index += MAX_CONCURR_TH)
-	{
-		if(BitMask[index] == 0)
-		{
-			const int start = devNode[index];
-			const int end = devNode[index + 1];
-			for (int k = start; k < end; k++)
-			{
-				const int dest = devEdge[k];
-				const int2 destination = devDistance[dest];
-				const int2 current = devDistance[index];
-				if(BitMask[dest] == 1 )
-				{
-					if( BitMask[index] == 0 && destination.y != INT_MAX)
-					{
-						devDistance[index].x = destination.x + 1;
-						devDistance[index].y = destination.y;
-						BitMask[index] = 1;
-						founds++;
-					}
-					else if( current.y != destination.y && current.y < MAX_SIZE && destination.y < MAX_SIZE )
-					{
-						Matrix[ (current.y 	   * MAX_SIZE) + destination.y ] = true;
-						Matrix[ (destination.y * MAX_SIZE) + current.y     ] = true;
-					}
-				}
-			}
-		}
-	}
-	GlobalWrite( founds, &BottomUp_FrontSize);
-}*/

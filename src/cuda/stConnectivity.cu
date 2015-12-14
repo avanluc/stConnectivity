@@ -18,8 +18,6 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 	size_t sizeCurand = MAX_CONCURR_BL(BLOCK_SIZE) * sizeof(curandState);
 	
 
-	
-
 	/***    DEVICE MEMORY POINTERS    ***/
 	int *Dedges;
 	int *Dvertex;
@@ -114,7 +112,8 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 		/***    LAUNCH RESET KERNEL    ***/
 		clean<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>();
-	
+		//init_bottomUp_only<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(Dsource, DBitMask);
+
 
 
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
@@ -124,11 +123,18 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 		TM_TD.stop();
 
 
+		/***    CHECK VISIT PERCENTAGE AND SOURCES    ***/
+		gpuErrchk( cudaMemcpyFromSymbol(&tempSources, color, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
+		totSrc += (tempSources-1);
+
+
 
 		/***    MATRIX STCONN ON HOST    ***/
-		TM_SEQ1.start();
 		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-		connect1 = MatrixBFS(matrix, MAX_SIZE, 0, 1, Queue);
+		TM_SEQ1.start();
+		connect1 = MatrixBFS(matrix, tempSources, 0, 1, Queue);
 		TM_SEQ1.stop();
 
 
@@ -138,11 +144,6 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 
-		/***    CHECK VISIT PERCENTAGE AND SOURCES    ***/
-		gpuErrchk( cudaMemcpyFromSymbol(&tempSources, color, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
-		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
-		totSrc += (tempSources-1);
 		
 
 		if(BOTTOM_UP && !connect1 && perc >= Treshold*100 )
@@ -175,9 +176,9 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 			/***    MATRIX STCONN ON HOST    ***/
-			TM_SEQ.start();
 			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-			connect = MatrixBFS(matrix, MAX_SIZE, 0, 1, Queue);
+			TM_SEQ.start();
+			connect = MatrixBFS(matrix, tempSources, 0, 1, Queue);
 			TM_SEQ.stop();
 			
 

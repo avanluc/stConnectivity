@@ -56,30 +56,18 @@ void computeElapsedTime(std::vector<double> topDown_times, std::vector<double> s
 	double sum_top = 0;
 	double sum_bot = 0;
 	double sum_seq = 0;
-	int TOTAL;
 
-	if(N_TEST > 1)
-	{
-		for (int i = 1; i < N_TEST; ++i){
-			sum_top += topDown_times[i];
-			sum_seq += seq_times[i];
-			sum_bot += bottomUp_times[i];
-		}
-		TOTAL = N_TEST-1;
-	}
-	else
-	{
-		sum_top = topDown_times[0];
-		sum_bot = bottomUp_times[0];
-		sum_seq = seq_times[0];
-		TOTAL = N_TEST;
+	for (int i = 0; i < N_TEST; ++i){
+		sum_top += topDown_times[i];
+		sum_bot += bottomUp_times[i];
+		sum_seq += seq_times[i];
 	}
 
-	printf("AVG HOST TIME      \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_seq / (TOTAL), 27, 0);
-	printf("AVG TOP-DOWN TIME  \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_top / (TOTAL), 27, 0);
-	printf("AVG BOTTOM-UP TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_bot / (TOTAL), 27, 0);
-	printf("AVG DEVICE TIME    \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_bot + sum_top) / (TOTAL), 27, 0);
-	printf("AVG TOTAL TIME     \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, (sum_top + sum_seq + sum_bot) / (TOTAL), 27, 0);
+	printf("AVG HOST TIME      \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_seq / (N_TEST), 27, 0);
+	printf("AVG TOP-DOWN TIME  \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_top / (N_TEST), 27, 0);
+	printf("AVG BOTTOM-UP TIME \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, sum_bot / (N_TEST), 27, 0);
+	printf("AVG DEVICE TIME    \t: %c[%d;%dm%.1f%c[%dm ms\n", 27, 0, 31, (sum_bot + sum_top) / (N_TEST), 27, 0);
+	printf("AVG TOTAL TIME     \t: %c[%d;%dm%.1f%c[%dm ms\n\n", 27, 0, 31, (sum_top + sum_seq + sum_bot) / (N_TEST), 27, 0);
 }
 
 

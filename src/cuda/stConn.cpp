@@ -19,7 +19,7 @@ bool MatrixBFS(const bool* adjMatrix, const int nof_nodes, const int source, con
 		int qNode = Queue[left++];
 		for (int i = 0; i < nof_nodes; ++i)
 		{
-			if(adjMatrix[qNode*nof_nodes + i])
+			if(adjMatrix[ (qNode * MAX_SIZE) + i ])
 			{
 				if(i == target)
 					return true;
@@ -96,7 +96,7 @@ bool stConnectivity(const int* Nodes, const int* Edges, const int nof_nodes, con
 void PrintResults(const int test, const int source, const int target, const bool connect, const float time)
 {
 	if(time < 0.0)
-		printf("    \tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\n\n", 
+		printf("    \tsource: %d     \ttarget: %d      \tresult: %c[%d;%dm%s%c[%dm\n", 
 														source, target, 27, 0, 31 + connect,(connect ? "true" : "false"), 
 														27, 0);
 	else
