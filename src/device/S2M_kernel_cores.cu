@@ -23,13 +23,13 @@ __device__ __forceinline__ int visit(const int* devNode,
 *
 */
 __device__ __forceinline__ void findConnection(const int dest,
-										const int index,
-										const int2 current,
-										const int2 destination,
-										int2* devDistance,
-										bool* BitMask,
-										bool* Matrix,
-										int& founds)
+											const int index,
+											const int2 current,
+											const int2 destination,
+											int2* devDistance,
+											bool* BitMask,
+											bool* Matrix,
+											int& founds)
 {
 	if(BitMask[dest] == 1 )
 	{

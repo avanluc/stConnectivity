@@ -1,4 +1,4 @@
-#include "stConnectivity.cu"
+#include "S2M.cu"
 
 
 /*

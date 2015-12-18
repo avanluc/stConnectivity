@@ -1,7 +1,5 @@
-//#pragma once
-
-#include "STCONN_kernels.cu"
-#include "stConn.h"
+#include "S2M_kernels.cu"
+#include "S2M.h"
 #include "statistic.h"
 
 
@@ -27,12 +25,15 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 	bool *DMatrix;
 	curandState* devStates;
 
+	bool *DBitMask1;
+	int *DQueue;
+
 
 	/***    RESULTS VECTORS    ***/
 	std::vector<double> mean_times(3);
 	std::vector<double> topDown_times(N_TEST);
 	std::vector<double> bottomUp_times(N_TEST);
-	std::vector<double> seq_times(N_TEST);
+	std::vector<double> bfs_times(N_TEST);
 	std::vector<long double> Percentual(N_TEST);
 	int totSrc = 0;
 
@@ -68,6 +69,9 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 		gpuErrchk( cudaMalloc((void **) &Dsource,   sizeSrcs) );
 		gpuErrchk( cudaMalloc((void **) &DBitMask,  sizeBMask) );
 
+		gpuErrchk( cudaMalloc((void **) &DBitMask1,   sizeBMask) );
+		gpuErrchk( cudaMalloc((void **) &DQueue,      MAX_SIZE * sizeof(int)) );
+
 
 		/***    CHOOSE RANDOM SOURCE AND DEST    ***/
 		int source = rand() % N;
@@ -97,34 +101,38 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 		gpuErrchk( cudaMemset(DMatrix, false, sizeMatrix) );
 		gpuErrchk( cudaMemset(DBitMask, false, sizeBMask) );
 
+		gpuErrchk( cudaMemset(DBitMask1, false, sizeBMask) );
+		gpuErrchk( cudaMemset(DQueue, 0, MAX_SIZE * sizeof(int)) );
+
 		
 		/***    INITIALIZE TIMERS    ***/
-		Timer<HOST> TM_SEQ;
-		Timer<HOST> TM_SEQ1;
-		Timer<DEVICE> TM_TD;
-		Timer<DEVICE> TM_BU;
-		float msecTOP  = 0.0f;
-		float msecBOT  = 0.0f;
-		float msecSEQ_BOT  = 0.0f;
-		float msecSEQ_TOP = 0.0f;
+		Timer<DEVICE> TM_TOP;
+		Timer<DEVICE> TM_BOT;
+		// Timer<HOST> TM_MATRIX1;
+		// Timer<HOST> TM_MATRIX2;
+		Timer<DEVICE> TM_MATRIX1;
+		Timer<DEVICE> TM_MATRIX2;
+		float msecTOP  = 0.0;
+		float msecBOT  = 0.0;
+		float msecBFS_TOP = 0.0;
+		float msecBFS_BOT = 0.0;
 
 
 
 		/***    LAUNCH RESET KERNEL    ***/
-		clean<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>();
-		//init_bottomUp_only<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>(Dsource, DBitMask);
+		clean<BLOCK_SIZE><<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>();
 
 
 
 		/***    LAUNCH STCONN TOP-DOWN KERNEL    ***/
-		TM_TD.start();
-		TopDown_Kernel<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
-					(Dvertex, Dedges, Dsource, Ddistance, DMatrix, DBitMask, Treshold, E, N, devStates);
-		TM_TD.stop();
+		TM_TOP.start();
+		TopDown_Kernel<BLOCK_SIZE, V_WARP_SIZE><<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+					(Dvertex, Dedges, Dsource, Ddistance, DMatrix, DBitMask, devStates, Treshold, E, N);
+		gpuErrchk( cudaMemcpyFromSymbol(&tempSources, color, sizeof(int), 0, cudaMemcpyDeviceToHost) );
+		TM_TOP.stop();
 
 
 		/***    CHECK VISIT PERCENTAGE AND SOURCES    ***/
-		gpuErrchk( cudaMemcpyFromSymbol(&tempSources, color, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		gpuErrchk( cudaMemcpyFromSymbol(&VisitedEdges, GlobalCounter, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 		perc = ((long double)VisitedEdges / (long double)E) * 100.0;
 		totSrc += (tempSources-1);
@@ -132,19 +140,24 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 		/***    MATRIX STCONN ON HOST    ***/
+/*
+		TM_MATRIX1.start();
 		gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-		TM_SEQ1.start();
 		connect1 = MatrixBFS(matrix, tempSources, 0, 1, Queue);
-		TM_SEQ1.stop();
+		TM_MATRIX1.stop();
+*/
+
+		TM_MATRIX1.start();
+		matrixVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+					(DMatrix, DBitMask1, DQueue, totSrc, 0, 1);
+		TM_MATRIX1.stop();
+		gpuErrchk( cudaMemcpyFromSymbol(&connect1, matrixResult, sizeof(bool), 0, cudaMemcpyDeviceToHost) );
 
 
 
-		msecTOP = TM_TD.duration();
-		msecSEQ_TOP = TM_SEQ1.duration();
+		msecTOP = TM_TOP.duration();
+		msecBFS_TOP = TM_MATRIX1.duration();
 
-
-
-		
 
 		if(BOTTOM_UP && !connect1 && perc >= Treshold*100 )
 		{
@@ -154,7 +167,7 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 			/***    LAUNCH STCONN BOTTOM_UP KERNEL    ***/
-			TM_BU.start();
+			TM_BOT.start();
 			while( FrontierSize )
 			{
 				gpuErrchk( cudaMemcpyToSymbol(BottomUp_FrontSize, &ZERO, sizeof(int), 0, cudaMemcpyHostToDevice) );
@@ -162,7 +175,7 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 								(Dvertex, Dedges, Ddistance, DMatrix, DBitMask, N);
 				gpuErrchk( cudaMemcpyFromSymbol(&FrontierSize, BottomUp_FrontSize, sizeof(int), 0, cudaMemcpyDeviceToHost) );
 			}
-			TM_BU.stop();
+			TM_BOT.stop();
 
 
 
@@ -176,17 +189,26 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 			/***    MATRIX STCONN ON HOST    ***/
+/*
+			TM_MATRIX2.start();
 			gpuErrchk( cudaMemcpy(matrix, DMatrix, sizeMatrix, cudaMemcpyDeviceToHost) );
-			TM_SEQ.start();
 			connect = MatrixBFS(matrix, tempSources, 0, 1, Queue);
-			TM_SEQ.stop();
+			TM_MATRIX2.stop();
+*/
+
+			gpuErrchk( cudaMemset(DBitMask1, false, sizeBMask) );
+			TM_MATRIX2.start();
+			matrixVisit<<< MAX_CONCURR_BL(BLOCK_SIZE), BLOCK_SIZE, SMem_Per_Block(BLOCK_SIZE)>>>\
+					(DMatrix, DBitMask1, DQueue, totSrc, 0, 1);
+			TM_MATRIX2.stop();
+			gpuErrchk( cudaMemcpyFromSymbol(&connect, matrixResult, sizeof(bool), 0, cudaMemcpyDeviceToHost) );
+
 			
 
-			msecBOT = TM_BU.duration();
-			msecSEQ_BOT = TM_SEQ.duration();
+			msecBOT = TM_BOT.duration();
+			msecBFS_BOT = TM_MATRIX2.duration();
 
-
-			PrintResults(test, source, target, connect, msecTOP + msecSEQ_TOP + msecBOT + msecSEQ_BOT);
+			PrintResults(test, source, target, connect, msecTOP + msecBFS_TOP + msecBOT + msecBFS_BOT);
 		}
 		else if( perc < Treshold*100 )
 		{
@@ -194,7 +216,7 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 		}
 		else
 		{
-			PrintResults(test, source, target, connect1, msecTOP + msecSEQ_TOP);
+			PrintResults(test, source, target, connect1, msecTOP + msecBFS_TOP);
 		}
 
 
@@ -209,7 +231,7 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 		/***    SAVE TIMES FOR STATISTICS EVALUATION    ***/
 		topDown_times[test] = msecTOP;
 		bottomUp_times[test] = msecBOT;
-		seq_times[test] = msecSEQ_BOT + msecSEQ_TOP;
+		bfs_times[test] = msecBFS_BOT + msecBFS_TOP;
 
 
 		/***    FREE DEVICE MEMORY    ***/
@@ -231,7 +253,7 @@ void doSTCONN(Graph graph, int N, int E, double Treshold){
 
 
 	/***    EVALUATE MEAN TIMES AND PERCENTAGE    ***/
-	computeElapsedTime( topDown_times, seq_times, bottomUp_times);
+	computeElapsedTime( topDown_times, bfs_times, bottomUp_times);
 	printf("AVG SOURCES        \t: %d\n", totSrc/N_TEST);
 	
 

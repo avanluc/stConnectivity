@@ -1,15 +1,7 @@
-//#pragma once
-
 #include "prefixSumAsm.cu"
 #include "definition.cuh"
 
 extern __shared__ unsigned char SMem[];
-__device__ int VisitResult = 0;
-__device__ int VisitResult1 = 0;
-__device__ int color = 0;
-__device__ int GlobalCounter = 0;
-__device__ int BottomUp_FrontSize = 0;
-__device__ int BottomUp_FrontSize1 = 0;
 
 
  /*
@@ -118,7 +110,7 @@ __device__ __forceinline__ void FrontierReserve(int founds, int& n, int &totalBl
 /*
 *
 */
-__device__ __forceinline__ void GlobalWrite(int founds, int* GlobalVar) {
+__device__ __forceinline__ void AtomicWrite(int founds, int* GlobalVar) {
 		
 	int n, total;
 	FrontierReserve(founds, n, total);
@@ -126,5 +118,3 @@ __device__ __forceinline__ void GlobalWrite(int founds, int* GlobalVar) {
 	if(Tid==0)
 		atomicAdd(GlobalVar, total);
 }
-
-

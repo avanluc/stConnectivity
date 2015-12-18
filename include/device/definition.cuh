@@ -8,6 +8,7 @@
 #define				  N_TEST 	40
 #define				MAX_SIZE	10000
 
+
 /* CUDA CONFIG */
 #define					 Tid 	threadIdx.x
 #define					 Bid 	blockIdx.x
@@ -33,12 +34,14 @@ const int 		  INIT_COLOR  =  2;
 #define     SMem_Per_BlockNum(BlockNum)		( MAX_V( SMem_Per_SM / (BlockNum) , SMem_Per_SM / (2 * Int_Size) ) )
 #define  IntSMem_Per_BlockNum(BlockNum)		( SMem_Per_BlockNum(BlockNum) / Int_Size )
 
+/* OPTIMIZATION */
+#define   		 V_WARP_SIZE	2
+
+
 /* SHARED MEMORY POINTERS */
 #define				TEMP_POS 	0
 #define			END_TEMP_POS 	(TEMP_POS + (35 * Int_Size))
 #define       	  F2Size_POS	END_TEMP_POS
-//#define			   F1_OFFSET	(F2Size_POS + (2 * Int_Size))
-//#define			   EXIT_FLAG	(F2Size_POS + Int_Size)
 #define			   F1_OFFSET	(F2Size_POS + Int_Size)
 #define		   FRONTIER_SIZE 	((SMem_Per_Block(BLOCK_SIZE) - F1_OFFSET))
 #define			   F2_OFFSET	(F1_OFFSET + FRONTIER_SIZE)
@@ -47,9 +50,5 @@ const int 		  INIT_COLOR  =  2;
 #define cudaAssert(condition, pos) \
   if (!(condition)){ printf("Assertion %s failed!\tpos = %d\n", #condition, pos); asm("trap;"); }
 
-const int SOURCES[] = {1, 2, 10, 50, 100, 500, 1000, 2000, 4000, 6000, 8000};
-const int LENGTH1 = sizeof(SOURCES) / sizeof(int);
-
 const double TRESH[] = {0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.5, 0.65, 0.75};
 const int LENGTH = sizeof(TRESH) / sizeof(double);
-

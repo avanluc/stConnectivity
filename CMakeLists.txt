@@ -28,14 +28,15 @@ endif()
 # ------------------------------------------------------------------
 
 include_directories(${PROJECT_SOURCE_DIR}/cub/
-					${PROJECT_SOURCE_DIR}/include/cuda/
+					${PROJECT_SOURCE_DIR}/include/device/
+					${PROJECT_SOURCE_DIR}/include/host/
 					${PROJECT_SOURCE_DIR}/Util/)
 
-set(HOST_SRC 	${PROJECT_SOURCE_DIR}/src/cuda/graph.cpp
-				${PROJECT_SOURCE_DIR}/src/cuda/stConn.cpp
-				${PROJECT_SOURCE_DIR}/src/cuda/statistic.cpp)
+set(HOST_SRC 	${PROJECT_SOURCE_DIR}/src/host/graph.cpp
+				${PROJECT_SOURCE_DIR}/src/host/S2M.cpp
+				${PROJECT_SOURCE_DIR}/src/host/statistic.cpp)
 
-set(DEVICE_SRC 	${PROJECT_SOURCE_DIR}/src/cuda/ptx.cu)
+set(DEVICE_SRC 	${PROJECT_SOURCE_DIR}/src/device/ptx.cu)
 			
 set(UTIL_SRC 	${PROJECT_SOURCE_DIR}/Util/fUtil.cpp
 				${PROJECT_SOURCE_DIR}/Util/readGraphHeader.cpp
@@ -105,8 +106,8 @@ find_library(
 	PATHS ${CUDA_TOOLKIT_ROOT_DIR}/lib64 ${CUDA_TOOLKIT_ROOT_DIR}/lib 
 )
 
-cuda_add_executable(stConnectivity ${PROJECT_SOURCE_DIR}/src/cuda/main.cu ${HOST_SRC} ${DEVICE_SRC} ${UTIL_SRC})
+cuda_add_executable(S2M ${PROJECT_SOURCE_DIR}/src/device/main.cu ${HOST_SRC} ${DEVICE_SRC} ${UTIL_SRC})
 
-target_link_libraries(stConnectivity ${DEVRT_LIBRARY})
+target_link_libraries(S2M ${DEVRT_LIBRARY})
 
 set(EXECUTABLE_OUTPUT_PATH ./)
